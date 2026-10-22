@@ -1,0 +1,83 @@
+# Python 虚拟环境、字节码与打包产物
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# 测试、静态检查与覆盖率缓存
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage/
+mutants/
+
+# 前端依赖、构建缓存与浏览器测试报告
+node_modules/
+.npm/
+.pnpm-store/
+.vite/
+.eslintcache
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# 本地密钥与环境配置；保留默认值清单及 deploy/env/ 中的非敏感配置
+.env
+.env.*
+!.env.example
+.secrets.generated
+.aws/
+.ssh/
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# 运行日志、本地数据库和备份（不忽略 SQL 迁移脚本）
+*.log
+*.log.*
+*.pid
+*.pid.lock
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite3-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.dump
+*.dump.tmp
+backups/
+
+# 操作系统、编辑器与临时文件
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.tmp
+*.bak
+
+# uv.lock、frontend/package-lock.json、contracts/、frontend/src/api/types/ 必须入库
