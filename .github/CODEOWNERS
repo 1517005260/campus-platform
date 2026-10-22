@@ -1,0 +1,45 @@
+# 改动下列路径的 PR 自动请对应负责人评审，未获批准不能合并（分支保护已开启 Code Owners 审核）。
+# 每条路径至少两位负责人：作者本人的批准不计入，单一负责人会使其本人的改动无法合并。
+# 多位负责人时任意一位批准即满足要求；跨模块契约还需调用方在 PR 中明确确认（见 PR 模板）。
+# 把 @member-a 等占位符替换成组员的 GitHub 用户名：
+#   A=M1 后端/数据演进  B=M1 前端/测试质量  C=M2/组长/需求  D=M2+RBAC/AI规范  E=M3/DevOps  F=M3+通知审计/集成契约
+
+# 默认：组长兜底
+*                                   @member-c @member-e
+
+# 各模块
+/services/m1-seat/                  @member-a @member-b
+/services/m2-room/                  @member-c @member-d
+/services/m3-repair/                @member-e @member-f
+/services/common/                   @member-d @member-f
+/frontend/                          @member-b @member-a
+/frontend/src/modules/m1-seat/      @member-b @member-a
+/frontend/src/modules/m2-room/      @member-c @member-d
+/frontend/src/modules/m3-repair/    @member-e @member-f
+/frontend/src/modules/common/       @member-d @member-f
+/frontend/src/api/types/            @member-f @member-b
+
+# 跨模块契约：提供方 + 调用方
+/services/m1-seat/app/api/internal.py   @member-a @member-c @member-e
+/contracts/openapi/m1-seat.json         @member-a @member-c @member-e
+/services/common/app/api/internal.py    @member-d @member-f @member-c @member-e
+/contracts/openapi/common.json          @member-d @member-f
+/contracts/events/                      @member-f @member-a @member-c @member-e
+/libs/campus_common/                    @member-d @member-f
+
+# schema 变更：数据演进负责人
+/services/*/migrations/                 @member-a @member-b
+/services/*/app/models.py               @member-a @member-b
+/services/*/app/seed.py                 @member-a @member-b
+
+# 流水线、部署与基础设施：DevOps 负责人
+/.github/                               @member-e @member-f
+/deploy/                                @member-e @member-f
+/scripts/                               @member-e @member-f
+/services/*/Dockerfile                  @member-e @member-f
+
+# AI 协作规则与项目文档
+/AGENTS.md                              @member-d @member-c
+/services/*/AGENTS.md                   @member-d @member-c
+/docs/requirements.md                   @member-c @member-d
+/docs/adr/                              @member-c @member-d

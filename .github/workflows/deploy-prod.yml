@@ -1,0 +1,131 @@
+# 生产发布：推送 v* 标签触发；或从 main 手动运行并填写已发布的版本号（回滚）。
+# production 环境配置了审批人（不能审批自己触发的部署），部署前会暂停等待批准；未配置审批人时拒绝部署。
+# 发布不重新构建：只接受 main 上、已在测试环境部署并通过集成测试的镜像（verified-<提交号> 标签），
+# 打上版本标签后部署；部署成功后才创建 GitHub Release，回滚只能选择已成功发布过的版本。
+# v* 标签只有仓库管理员能创建，创建后任何人（包括管理员）都不能修改或删除；retag_images.sh 拒绝把版本标签改指到其他镜像。
+name: Deploy Prod
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要部署的已发布版本（回滚时填写目标版本，如 v1.1.0）"
+        required: true
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 给镜像打版本标签
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - name: 生产审批人已配置
+        run: |
+          [[ "$CONFIGURED" == "true" ]] || {
+            echo "::error::production 环境尚未配置审批人，运行 scripts/github_setup.sh <仓库> <审批人...> 后再发布"; exit 1; }
+        env:
+          CONFIGURED: ${{ vars.PROD_APPROVERS_CONFIGURED }}
+      - id: v
+        name: 确定并校验版本号
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::版本号必须形如 v1.2.0：$VERSION"; exit 1; }
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then
+            gh release view "$VERSION" > /dev/null || { echo "::error::$VERSION 不是已发布的版本"; exit 1; }
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 发布的提交必须在 main 上
+        if: github.event_name == 'push'
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "::error::$GITHUB_REF_NAME 指向的提交不在 main 上"; exit 1; }
+      - name: 给已验证的镜像打版本标签（仅新发布；该提交未通过测试环境验证时失败）
+        if: github.event_name == 'push'
+        run: |
+          export REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
+          scripts/retag_images.sh "verified-$(git rev-parse --short=12 HEAD)" "$VERSION"
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read # 发送到服务器用于拉取镜像的令牌只有读权限
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # 使用该版本自己的部署配置，保证配置与镜像匹配（回滚同样适用）
+          ref: ${{ needs.release.outputs.version }}
+      - uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with: { ssh-private-key: "${{ secrets.DEPLOY_SSH_KEY }}" }
+      - name: 写入已核对的服务器指纹（不在部署时临时信任）
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
+        env:
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: 部署
+        run: |
+          export REGISTRY="ghcr.io/${GITHUB_REPOSITORY,,}"
+          scripts/deploy.sh prod "$VERSION"
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DB_PASSWORD_COMMON: ${{ secrets.DB_PASSWORD_COMMON }}
+          DB_PASSWORD_M1: ${{ secrets.DB_PASSWORD_M1 }}
+          DB_PASSWORD_M2: ${{ secrets.DB_PASSWORD_M2 }}
+          DB_PASSWORD_M3: ${{ secrets.DB_PASSWORD_M3 }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          RABBITMQ_APP_PASSWORD: ${{ secrets.RABBITMQ_APP_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          SERVICE_KEY_M2: ${{ secrets.SERVICE_KEY_M2 }}
+          SERVICE_KEY_M3: ${{ secrets.SERVICE_KEY_M3 }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+
+  publish:
+    # 部署成功后才创建 Release：被拒绝或失败的发布不会出现在"已发布版本"中
+    needs: [release, deploy]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - name: 生成 Release Notes（列出该版本包含的 PR）
+        run: gh release create "$VERSION" --generate-notes --verify-tag
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

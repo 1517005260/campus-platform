@@ -1,0 +1,19 @@
+# 依赖更新：镜像、Actions（按提交 SHA 固定）、Python 与前端依赖全部固定版本，
+# 升级只通过 Dependabot 每周提交的 PR，经 CI 验证后合并。
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/services/common", "/services/m1-seat", "/services/m2-room", "/services/m3-repair", "/frontend"]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directories: ["/deploy"]
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: uv
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule: { interval: weekly }

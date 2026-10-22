@@ -1,0 +1,170 @@
+# 提交与合并请求自动触发：代码规范 → 测试（含迁移重放、种子幂等）→ 契约检查 → 镜像构建。
+# 分支保护只要求 ci-passed 一个检查，它汇总其余所有任务的结果。
+name: CI
+
+on:
+  push:
+    branches-ignore: [main] # main 的推送由 deploy-test.yml 负责（它会先跑同样的检查）
+  pull_request:
+    branches: [main]
+    # labeled/unlabeled：PR 加上或去掉 breaking-change-approved 标签时重新运行契约检查
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.32"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
+      - run: uv sync --frozen --all-packages
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: scripts/check_shell.sh
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { service: common, role: common_svc }
+          - { service: m1-seat, role: m1_seat }
+          - { service: m2-room, role: m2_room }
+          - { service: m3-repair, role: m3_repair }
+    services:
+      postgres:
+        image: postgres:16.15
+        env:
+          POSTGRES_USER: campus
+          POSTGRES_PASSWORD: campus
+          POSTGRES_DB: campus_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U campus" --health-interval 5s --health-retries 10
+    env:
+      # 与部署环境一致：每个服务用自己的数据库角色，只拥有自己的 schema（密码在下一步初始化时设为角色名）
+      DATABASE_URL: postgresql+psycopg://${{ matrix.role }}:${{ matrix.role }}@localhost:5432/campus_test
+      SEED_DEMO: "true"
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
+      - name: 初始化数据库角色与 schema（与部署环境相同的 init.sh）
+        run: bash deploy/postgres/init.sh
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGPASSWORD: campus
+          POSTGRES_USER: campus
+          POSTGRES_DB: campus_test
+          DB_PASSWORD_COMMON: common_svc
+          DB_PASSWORD_M1: m1_seat
+          DB_PASSWORD_M2: m2_room
+          DB_PASSWORD_M3: m3_repair
+      - run: uv sync --frozen --package ${{ matrix.service }}
+      - name: 从空库重放全部迁移
+        run: uv run --no-sync alembic upgrade head
+      - name: 模型与迁移一致（改了模型必须写迁移）
+        run: uv run --no-sync alembic check
+      - name: 迁移可回退再重放
+        run: uv run --no-sync alembic downgrade base && uv run --no-sync alembic upgrade head
+      - name: 种子数据幂等（连续执行两次，各表行数不变）
+        run: |
+          uv run --no-sync python -m app.seed
+          uv run --no-sync python ../../scripts/seed_snapshot.py > /tmp/seed-1.txt
+          uv run --no-sync python -m app.seed
+          uv run --no-sync python ../../scripts/seed_snapshot.py > /tmp/seed-2.txt
+          diff -u /tmp/seed-1.txt /tmp/seed-2.txt
+      - name: 测试与覆盖率门槛
+        run: uv run --no-sync pytest --cov=app --cov-report=term-missing --junitxml=junit.xml
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: junit-${{ matrix.service }}
+          path: services/${{ matrix.service }}/junit.xml
+
+  test-lib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
+      - run: uv sync --frozen --package campus-common --all-extras
+      - run: uv run --no-sync pytest libs/campus_common/tests
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
+      - run: uv sync --frozen --all-packages
+      - run: scripts/check_contracts.sh
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          # 破坏性变更只在 PR 上判定（标签属于 PR）；分支推送只检查漂移
+          CHECK_BREAKING: ${{ github.event_name == 'pull_request' }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: 22.23.3, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - name: 类型与契约一致（契约变了但没重新生成类型时失败）
+        run: npm run gen:types && git diff --exit-code src/api/types
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build
+
+  docker-build:
+    # 只验证镜像能构建，不推送；推送在 deploy-test.yml 中进行
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { service: common, context: ., file: services/common/Dockerfile }
+          - { service: m1-seat, context: ., file: services/m1-seat/Dockerfile }
+          - { service: m2-room, context: ., file: services/m2-room/Dockerfile }
+          - { service: m3-repair, context: ., file: services/m3-repair/Dockerfile }
+          - { service: frontend, context: frontend, file: frontend/Dockerfile }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  ci-passed:
+    if: always()
+    needs: [lint, test, test-lib, contract, frontend, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 所有检查必须通过
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success")'

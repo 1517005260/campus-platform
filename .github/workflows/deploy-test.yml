@@ -1,0 +1,118 @@
+# 合并到 main 后：重新跑 CI → 构建并推送镜像（标签为提交号）→ 自动部署测试环境 → 跨模块集成测试
+# → 通过后给镜像加 verified-<提交号> 标签。生产发布只接受带该标签的镜像。
+# concurrency 保证同一时间只有一次部署，集成测试在部署完成后才运行（等效于"部署窗口"）。
+#
+# 仓库变量（Settings → Variables）：TEST_ENV_FILE 选择测试环境配置，默认 test.env；
+# 测试与生产共用一台服务器时设为 test-single-server.env。网关端口等配置都取自该文件。
+name: Deploy Test
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+  UV_VERSION: "0.11.32"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: tag
+        run: echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 镜像仓库路径需小写
+        run: echo "REGISTRY=${REGISTRY,,}" >> "$GITHUB_ENV"
+      - run: scripts/build_and_push.sh "${{ steps.tag.outputs.tag }}"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      packages: read # 发送到服务器用于拉取镜像的令牌只有读权限
+    outputs:
+      gateway_url: ${{ steps.deploy.outputs.gateway_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with: { ssh-private-key: "${{ secrets.DEPLOY_SSH_KEY }}" }
+      - name: 写入已核对的服务器指纹（不在部署时临时信任）
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
+        env:
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - id: deploy
+        name: 部署
+        run: |
+          export REGISTRY="${REGISTRY,,}"
+          scripts/deploy.sh test "${{ needs.build.outputs.tag }}"
+        env:
+          ENV_FILE: deploy/env/${{ vars.TEST_ENV_FILE || 'test.env' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DB_PASSWORD_COMMON: ${{ secrets.DB_PASSWORD_COMMON }}
+          DB_PASSWORD_M1: ${{ secrets.DB_PASSWORD_M1 }}
+          DB_PASSWORD_M2: ${{ secrets.DB_PASSWORD_M2 }}
+          DB_PASSWORD_M3: ${{ secrets.DB_PASSWORD_M3 }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          RABBITMQ_APP_PASSWORD: ${{ secrets.RABBITMQ_APP_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          SERVICE_KEY_M2: ${{ secrets.SERVICE_KEY_M2 }}
+          SERVICE_KEY_M3: ${{ secrets.SERVICE_KEY_M3 }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "${{ env.UV_VERSION }}" }
+      - name: 跨模块集成测试
+        run: scripts/integration_test.sh "${{ steps.deploy.outputs.gateway_url }}" "${{ needs.build.outputs.tag }}"
+        env:
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+
+  verify:
+    # 部署与集成测试都通过后才给镜像加 verified 标签；生产发布只接受带该标签的镜像
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: 标记为已验证
+        run: |
+          export REGISTRY="${REGISTRY,,}"
+          scripts/retag_images.sh "${{ needs.build.outputs.tag }}" "verified-${{ needs.build.outputs.tag }}"

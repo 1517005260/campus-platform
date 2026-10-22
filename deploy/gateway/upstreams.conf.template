@@ -1,0 +1,9 @@
+# 测试/生产环境的上游：容器重建后 IP 会变化，用 resolve 让 nginx 按 Docker DNS 定期重新解析，
+# 不需要重启网关（nginx ≥ 1.27.3）。${...} 由镜像启动时从环境变量替换。
+resolver ${GATEWAY_RESOLVER} valid=10s ipv6=off;
+
+upstream common_api { zone common_api 64k; server ${COMMON_UPSTREAM} resolve; keepalive 16; }
+upstream m1_api     { zone m1_api 64k;     server ${M1_UPSTREAM} resolve;     keepalive 16; }
+upstream m2_api     { zone m2_api 64k;     server ${M2_UPSTREAM} resolve;     keepalive 16; }
+upstream m3_api     { zone m3_api 64k;     server ${M3_UPSTREAM} resolve;     keepalive 16; }
+upstream frontend   { zone frontend 64k;   server ${FRONTEND_UPSTREAM} resolve; keepalive 16; }

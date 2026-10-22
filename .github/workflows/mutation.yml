@@ -1,0 +1,68 @@
+# 变异测试：自动把业务代码改坏（如 <= 改成 <），检查测试能否发现。
+# 每周一运行，也可手动触发。报告由测试负责人（B）查看并补测试。
+name: Mutation Test
+
+on:
+  schedule:
+    - cron: "0 1 * * 1" # 每周一 09:00（北京时间）
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "服务目录名（需在其 pyproject.toml 中配置 [tool.mutmut]）"
+        type: choice
+        options: [m1-seat, m2-room, m3-repair, common]
+        default: m1-seat
+
+permissions:
+  contents: read
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.15
+        env: { POSTGRES_USER: campus, POSTGRES_PASSWORD: campus, POSTGRES_DB: campus_test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U campus" --health-interval 5s --health-retries 10
+    env:
+      SERVICE: ${{ inputs.service || 'm1-seat' }}
+    defaults:
+      run:
+        working-directory: services/${{ inputs.service || 'm1-seat' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "0.11.32" } # 与 ci.yml、Dockerfile 中的 uv 版本保持一致
+      - name: 确认该服务配置了变异范围
+        run: |
+          grep -q '^\[tool.mutmut\]' pyproject.toml || {
+            echo "::error::未在 pyproject.toml 中配置 [tool.mutmut]，没有可变异的代码"; exit 1; }
+      - name: 初始化数据库角色与 schema，测试以该服务自己的角色运行
+        working-directory: .
+        run: |
+          bash deploy/postgres/init.sh
+          role="$(python3 -c 'import sys; print({"common": "common_svc", "m1-seat": "m1_seat", "m2-room": "m2_room", "m3-repair": "m3_repair"}[sys.argv[1]])' "$SERVICE")"
+          echo "DATABASE_URL=postgresql+psycopg://$role:$role@localhost:5432/campus_test" >> "$GITHUB_ENV"
+        env:
+          PGHOST: localhost
+          PGPASSWORD: campus
+          POSTGRES_USER: campus
+          POSTGRES_DB: campus_test
+          DB_PASSWORD_COMMON: common_svc
+          DB_PASSWORD_M1: m1_seat
+          DB_PASSWORD_M2: m2_room
+          DB_PASSWORD_M3: m3_repair
+      - run: uv sync --frozen --package "$SERVICE"
+      - run: uv run --no-sync alembic upgrade head
+      # mutmut 只在配置或测试本身出错时失败；存活的变异体是给测试负责人的改进线索，不影响结果。
+      # 版本与 [tool.mutmut] 的键名（source_paths）对应，升级时一并核对
+      - run: uv run --no-sync --with mutmut==3.8.0 mutmut run
+      - name: 生成报告（没有任何变异体时失败）
+        run: |
+          uv run --no-sync --with mutmut==3.8.0 mutmut results --all true | tee mutation-report.txt
+          [[ -s mutation-report.txt ]] || { echo "::error::没有生成任何变异体，检查 [tool.mutmut] 配置"; exit 1; }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-report
+          path: services/${{ inputs.service || 'm1-seat' }}/mutation-report.txt
