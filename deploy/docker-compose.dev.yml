@@ -41,7 +41,7 @@ services:
     ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"] # 8025 网页查看收到的邮件
 
   gateway:
-    image: nginxinc/nginx-unprivileged:1.27.5-alpine
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine
     ports: ["127.0.0.1:8000:8080"]
     environment:
       COMMON_UPSTREAM: host.docker.internal:8004
