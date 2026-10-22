@@ -1,0 +1,37 @@
+[project]
+name = "m3-repair"
+version = "0.1.0"
+description = "M3 物业报修工单"
+requires-python = ">=3.12"
+dependencies = [
+    "campus-common",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "time-machine>=2.15",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+campus-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-compose.dev.yml）"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/stubs.py"]
+
+[tool.coverage.report]
+# 桩阶段的起点；每完成一批真实实现就上调，第二次 Review 前达到 70
+fail_under = 50
