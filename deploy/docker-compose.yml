@@ -99,7 +99,7 @@ services:
       interval: 5s
 
   rabbitmq:
-    image: rabbitmq:3.13.7-management
+    image: rabbitmq:4.3.6-management
     # 节点名与数据目录按主机名区分（rabbit@<hostname>）；固定主机名，容器重建后数据仍在
     hostname: rabbitmq
     restart: unless-stopped

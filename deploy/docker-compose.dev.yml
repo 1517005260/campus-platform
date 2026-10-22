@@ -28,7 +28,7 @@ services:
     ports: ["127.0.0.1:6379:6379"]
 
   rabbitmq:
-    image: rabbitmq:3.13.7-management
+    image: rabbitmq:4.3.6-management
     hostname: rabbitmq # 数据目录按主机名区分，固定后重建容器数据仍在
     environment:
       RABBITMQ_DEFAULT_USER: campus
