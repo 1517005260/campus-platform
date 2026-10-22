@@ -62,7 +62,7 @@ jobs:
         run: |
           uv run --no-sync --with mutmut==3.8.0 mutmut results --all true | tee mutation-report.txt
           [[ -s mutation-report.txt ]] || { echo "::error::没有生成任何变异体，检查 [tool.mutmut] 配置"; exit 1; }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutation-report
           path: services/${{ inputs.service || 'm1-seat' }}/mutation-report.txt

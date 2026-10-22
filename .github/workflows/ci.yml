@@ -92,7 +92,7 @@ jobs:
           diff -u /tmp/seed-1.txt /tmp/seed-2.txt
       - name: 测试与覆盖率门槛
         run: uv run --no-sync pytest --cov=app --cov-report=term-missing --junitxml=junit.xml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: junit-${{ matrix.service }}
