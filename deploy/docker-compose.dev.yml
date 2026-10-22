@@ -5,7 +5,7 @@ name: campus-dev
 
 services:
   postgres:
-    image: postgres:16.15
+    image: postgres:18.4
     environment:
       POSTGRES_USER: campus
       POSTGRES_PASSWORD: campus
