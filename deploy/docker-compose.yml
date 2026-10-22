@@ -128,7 +128,7 @@ services:
 
   mailpit:
     # 测试环境的邮件收件箱（COMPOSE_PROFILES=mailcatcher 时启动）。生产环境配置真实 SMTP，不启动它
-    image: axllent/mailpit:v1.27
+    image: axllent/mailpit:v1.31
     profiles: [mailcatcher]
     restart: unless-stopped
     logging: *logging
