@@ -1,5 +1,5 @@
 # 构建上下文是仓库根目录：docker build -f services/common/Dockerfile .
-FROM python:3.12.15-slim
+FROM python:3.14.7-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
