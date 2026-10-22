@@ -91,7 +91,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7.4.11
+    image: redis:8.10.1
     restart: unless-stopped
     logging: *logging
     healthcheck:
