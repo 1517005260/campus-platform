@@ -1,0 +1,6 @@
+# 开发环境的上游：服务运行在宿主机上（host.docker.internal），地址固定，启动时解析一次即可。
+upstream common_api { server ${COMMON_UPSTREAM}; keepalive 16; }
+upstream m1_api     { server ${M1_UPSTREAM}; keepalive 16; }
+upstream m2_api     { server ${M2_UPSTREAM}; keepalive 16; }
+upstream m3_api     { server ${M3_UPSTREAM}; keepalive 16; }
+upstream frontend   { server ${FRONTEND_UPSTREAM}; keepalive 16; }

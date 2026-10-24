@@ -1,0 +1,311 @@
+# 测试 / 生产环境的完整编排。由 scripts/deploy.sh 拷贝到服务器执行：
+#   docker compose -p campus-<env> up -d --wait
+# 所有变量来自同目录的 .env（deploy.sh 用 deploy/env/<env>.env + GitHub 环境密钥生成）。
+# 只有网关对外暴露端口；数据库、中间件、各服务只在 Docker 内网可达（Mailpit 界面只绑定本机回环）。
+#
+# 启动顺序：postgres/redis/rabbitmq 健康 → mq-setup 完成（拓扑、policy、业务账号）
+#           → 各 api 就绪（迁移、种子、/ready）→ worker/beat/consumer → 网关
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
+x-service: &service
+  restart: unless-stopped
+  stop_grace_period: 60s # worker 收到停止信号后先处理完手头任务
+  logging: *logging
+
+# 环境变量按进程所需组合：每个进程只拿到自己用得到的配置与密钥
+x-base-env: &base-env
+  REDIS_URL: redis://redis:6379/0
+  # 业务进程使用权限受限的业务账号；管理员账号只给 mq-setup
+  RABBITMQ_URL: amqp://${RABBITMQ_APP_USER:-campus_app}:${RABBITMQ_APP_PASSWORD:?缺少 RABBITMQ_APP_PASSWORD}@rabbitmq:5672//
+  STUB_CLIENTS: ${STUB_CLIENTS:-false}
+  DEPLOY_ENV: ${DEPLOY_ENV:?缺少 DEPLOY_ENV}
+  APP_VERSION: ${VERSION:?缺少 VERSION} # /version 报告部署的标签（提交号或 v*），供部署校验
+
+x-api-env: &api-env # 仅 api：校验用户 token、写种子数据
+  JWT_SECRET: ${JWT_SECRET:?缺少 JWT_SECRET}
+  SEED_DEMO: ${SEED_DEMO:-false}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:?缺少 DEMO_PASSWORD} # 演示账号密码（SEED_DEMO=true 时使用），默认值见 .env.example
+
+x-common-db: &common-db
+  DATABASE_URL: postgresql+psycopg://common_svc:${DB_PASSWORD_COMMON:?缺少 DB_PASSWORD_COMMON}@postgres:5432/campus
+x-m1-db: &m1-db
+  DATABASE_URL: postgresql+psycopg://m1_seat:${DB_PASSWORD_M1:?缺少 DB_PASSWORD_M1}@postgres:5432/campus
+x-m2-db: &m2-db
+  DATABASE_URL: postgresql+psycopg://m2_room:${DB_PASSWORD_M2:?缺少 DB_PASSWORD_M2}@postgres:5432/campus
+x-m3-db: &m3-db
+  DATABASE_URL: postgresql+psycopg://m3_repair:${DB_PASSWORD_M3:?缺少 DB_PASSWORD_M3}@postgres:5432/campus
+
+# 调用其他服务 /internal 接口时出示的本服务密钥与对方地址（只有 M2、M3 调用其他服务）
+x-m2-caller: &m2-caller
+  SERVICE_KEY: ${SERVICE_KEY_M2:?缺少 SERVICE_KEY_M2}
+  M1_URL: http://m1-api:8001
+  COMMON_URL: http://common-api:8004
+x-m3-caller: &m3-caller
+  SERVICE_KEY: ${SERVICE_KEY_M3:?缺少 SERVICE_KEY_M3}
+  M1_URL: http://m1-api:8001
+  COMMON_URL: http://common-api:8004
+
+x-api-health: &api-health
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
+x-api-depends: &api-depends
+  postgres: { condition: service_healthy }
+  redis: { condition: service_healthy }
+  mq-setup: { condition: service_completed_successfully }
+
+x-worker-health: &worker-health
+  # Celery 节点名为 worker@<容器主机名>，ping 不通说明 worker 已失去与 broker 的连接
+  test: ["CMD-SHELL", "celery -A app.worker inspect ping -d worker@$$HOSTNAME -t 10 > /dev/null"]
+  interval: 60s
+  timeout: 20s
+  retries: 3
+  start_period: 30s
+
+services:
+  # ---------- 外部依赖 ----------
+  postgres:
+    image: postgres:16.15
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: campus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?缺少 POSTGRES_PASSWORD}
+      POSTGRES_DB: campus
+      DB_PASSWORD_COMMON: ${DB_PASSWORD_COMMON:?缺少 DB_PASSWORD_COMMON}
+      DB_PASSWORD_M1: ${DB_PASSWORD_M1:?缺少 DB_PASSWORD_M1}
+      DB_PASSWORD_M2: ${DB_PASSWORD_M2:?缺少 DB_PASSWORD_M2}
+      DB_PASSWORD_M3: ${DB_PASSWORD_M3:?缺少 DB_PASSWORD_M3}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      # 走 TCP：镜像初始化期间的临时实例只监听 unix socket，init.sh 完成前不会被判为健康
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U campus -d campus"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4.11
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  rabbitmq:
+    image: rabbitmq:3.13.7-management
+    # 节点名与数据目录按主机名区分（rabbit@<hostname>）；固定主机名，容器重建后数据仍在
+    hostname: rabbitmq
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      RABBITMQ_DEFAULT_USER: campus
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?缺少 RABBITMQ_PASSWORD}
+    volumes: [rabbitmq:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      retries: 20
+
+  mq-setup:
+    # 一次性任务：声明消息拓扑、设置 policy、创建业务账号；成功退出后其他服务才启动
+    image: ${REGISTRY:?缺少 REGISTRY}/campus-common:${VERSION}
+    command: ["mq-setup"]
+    restart: "no"
+    logging: *logging
+    environment:
+      RABBITMQ_URL: amqp://campus:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      RABBITMQ_APP_USER: ${RABBITMQ_APP_USER:-campus_app}
+      RABBITMQ_APP_PASSWORD: ${RABBITMQ_APP_PASSWORD}
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
+  mailpit:
+    # 测试环境的邮件收件箱（COMPOSE_PROFILES=mailcatcher 时启动）。生产环境配置真实 SMTP，不启动它
+    image: axllent/mailpit:v1.27
+    profiles: [mailcatcher]
+    restart: unless-stopped
+    logging: *logging
+    ports: ["${MAIL_UI_PORT:-127.0.0.1:8025}:8025"] # 只绑定本机，经 SSH 隧道查看
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+
+  # ---------- common ----------
+  common-api: &common
+    <<: *service
+    image: ${REGISTRY}/campus-common:${VERSION}
+    command: ["api"]
+    environment:
+      <<: [*base-env, *api-env, *common-db]
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?缺少 ADMIN_PASSWORD} # 引导管理员 admin 的初始密码
+      # 只包含允许调用本服务 /internal 接口的服务及其密钥
+      SERVICE_KEYS: '{"m2-room": "${SERVICE_KEY_M2}", "m3-repair": "${SERVICE_KEY_M3}"}'
+    depends_on: *api-depends
+    healthcheck:
+      <<: *api-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/ready')"]
+
+  common-consumer:
+    <<: *common
+    command: ["consumer"]
+    environment:
+      <<: [*base-env, *common-db]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on: { common-api: { condition: service_healthy } }
+
+  common-worker:
+    <<: *common
+    command: ["worker"]
+    environment:
+      <<: [*base-env, *common-db]
+      # 为空表示不发邮件（通知只保留站内信）
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      MAIL_FROM: ${MAIL_FROM:-noreply@campus.local}
+    healthcheck: *worker-health
+    depends_on: { common-api: { condition: service_healthy } }
+
+  common-beat:
+    # beat 只按时投递任务，不访问数据库；进程退出即容器退出，由重启策略拉起，不另设健康检查
+    <<: *common
+    command: ["beat"]
+    environment: *base-env
+    healthcheck: { disable: true }
+    depends_on: { common-api: { condition: service_healthy } }
+
+  # ---------- M1 ----------
+  m1-api: &m1
+    <<: *service
+    image: ${REGISTRY}/campus-m1-seat:${VERSION}
+    command: ["api"]
+    environment:
+      <<: [*base-env, *api-env, *m1-db]
+      SERVICE_KEYS: '{"m2-room": "${SERVICE_KEY_M2}", "m3-repair": "${SERVICE_KEY_M3}"}'
+    depends_on: *api-depends
+    healthcheck:
+      <<: *api-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready')"]
+
+  m1-worker:
+    <<: *m1
+    command: ["worker"]
+    environment:
+      <<: [*base-env, *m1-db]
+    healthcheck: *worker-health
+    depends_on: { m1-api: { condition: service_healthy } }
+
+  m1-beat:
+    <<: *m1
+    command: ["beat"]
+    environment: *base-env
+    healthcheck: { disable: true }
+    depends_on: { m1-api: { condition: service_healthy } }
+
+  # ---------- M2 ----------
+  m2-api: &m2
+    <<: *service
+    image: ${REGISTRY}/campus-m2-room:${VERSION}
+    command: ["api"]
+    environment:
+      <<: [*base-env, *api-env, *m2-db, *m2-caller]
+      SERVICE_KEYS: "{}" # 没有服务调用 M2 的 /internal 接口
+    depends_on: *api-depends
+    healthcheck:
+      <<: *api-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready')"]
+
+  m2-worker:
+    <<: *m2
+    command: ["worker"]
+    environment:
+      <<: [*base-env, *m2-db, *m2-caller]
+    healthcheck: *worker-health
+    depends_on: { m2-api: { condition: service_healthy } }
+
+  m2-beat:
+    <<: *m2
+    command: ["beat"]
+    environment: *base-env
+    healthcheck: { disable: true }
+    depends_on: { m2-api: { condition: service_healthy } }
+
+  # ---------- M3 ----------
+  m3-api: &m3
+    <<: *service
+    image: ${REGISTRY}/campus-m3-repair:${VERSION}
+    command: ["api"]
+    environment:
+      <<: [*base-env, *api-env, *m3-db, *m3-caller]
+      SERVICE_KEYS: "{}" # 没有服务调用 M3 的 /internal 接口
+    depends_on: *api-depends
+    healthcheck:
+      <<: *api-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/ready')"]
+
+  m3-worker:
+    <<: *m3
+    command: ["worker"]
+    environment:
+      <<: [*base-env, *m3-db, *m3-caller]
+    healthcheck: *worker-health
+    depends_on: { m3-api: { condition: service_healthy } }
+
+  m3-beat:
+    <<: *m3
+    command: ["beat"]
+    environment: *base-env
+    healthcheck: { disable: true }
+    depends_on: { m3-api: { condition: service_healthy } }
+
+  # ---------- 前端与网关 ----------
+  frontend:
+    image: ${REGISTRY}/campus-frontend:${VERSION}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+
+  gateway:
+    image: nginxinc/nginx-unprivileged:1.27.5-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports: ["${GATEWAY_PORT:-8000}:8080"]
+    environment:
+      GATEWAY_RESOLVER: 127.0.0.11 # Docker 内置 DNS
+      COMMON_UPSTREAM: common-api:8004
+      M1_UPSTREAM: m1-api:8001
+      M2_UPSTREAM: m2-api:8002
+      M3_UPSTREAM: m3-api:8003
+      FRONTEND_UPSTREAM: frontend:8080
+    volumes:
+      - ./gateway/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./gateway/upstreams.conf.template:/etc/nginx/templates/00-upstreams.conf.template:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+    depends_on:
+      common-api: { condition: service_healthy }
+      m1-api: { condition: service_healthy }
+      m2-api: { condition: service_healthy }
+      m3-api: { condition: service_healthy }
+      frontend: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  rabbitmq:

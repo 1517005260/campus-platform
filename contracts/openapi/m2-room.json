@@ -1,0 +1,2013 @@
+{
+  "components": {
+    "schemas": {
+      "Application": {
+        "properties": {
+          "applicant": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "attendees": {
+            "title": "Attendees",
+            "type": "integer"
+          },
+          "current_level": {
+            "title": "Current Level",
+            "type": "integer"
+          },
+          "deadline_at": {
+            "description": "当前级别审批截止时间，超时自动撤销",
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRecordOut"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "withdrawn",
+              "expired",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_levels": {
+            "title": "Total Levels",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "applicant",
+          "room_id",
+          "start_at",
+          "end_at",
+          "purpose",
+          "attendees",
+          "status",
+          "current_level",
+          "total_levels",
+          "deadline_at",
+          "records"
+        ],
+        "title": "Application",
+        "type": "object"
+      },
+      "ApplicationCreate": {
+        "properties": {
+          "attendees": {
+            "minimum": 1.0,
+            "title": "Attendees",
+            "type": "integer"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "purpose": {
+            "examples": [
+              "班级读书会"
+            ],
+            "maxLength": 500,
+            "minLength": 2,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id",
+          "start_at",
+          "end_at",
+          "purpose",
+          "attendees"
+        ],
+        "title": "ApplicationCreate",
+        "type": "object"
+      },
+      "ApplicationForApprover": {
+        "properties": {
+          "affected_reservations": {
+            "description": "批准后将被取消的个人座位预约数",
+            "title": "Affected Reservations",
+            "type": "integer"
+          },
+          "applicant": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "attendees": {
+            "title": "Attendees",
+            "type": "integer"
+          },
+          "current_level": {
+            "title": "Current Level",
+            "type": "integer"
+          },
+          "deadline_at": {
+            "description": "当前级别审批截止时间，超时自动撤销",
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRecordOut"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "withdrawn",
+              "expired",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_levels": {
+            "title": "Total Levels",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "applicant",
+          "room_id",
+          "start_at",
+          "end_at",
+          "purpose",
+          "attendees",
+          "status",
+          "current_level",
+          "total_levels",
+          "deadline_at",
+          "records",
+          "affected_reservations"
+        ],
+        "title": "ApplicationForApprover",
+        "type": "object"
+      },
+      "ApprovalAction": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "title": "ApprovalAction",
+        "type": "object"
+      },
+      "ApprovalFlow": {
+        "properties": {
+          "dept_scoped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Scoped"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/FlowLevel"
+            },
+            "minItems": 1,
+            "title": "Levels",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "room_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "classroom",
+                  "library",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room Type"
+          }
+        },
+        "required": [
+          "name",
+          "levels"
+        ],
+        "title": "ApprovalFlow",
+        "type": "object"
+      },
+      "ApprovalRecordOut": {
+        "properties": {
+          "action": {
+            "enum": [
+              "approve",
+              "reject",
+              "expire",
+              "withdraw",
+              "cancel"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "approver": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserBrief"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "系统动作（如超时）为空"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "level": {
+            "title": "Level",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level",
+          "approver",
+          "action",
+          "comment",
+          "at"
+        ],
+        "title": "ApprovalRecordOut",
+        "type": "object"
+      },
+      "Eligibility": {
+        "properties": {
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "reasons": {
+            "description": "不满足的原因，例如 近 30 天违约 3 次",
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "eligible",
+          "reasons"
+        ],
+        "title": "Eligibility",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "FlowLevel": {
+        "properties": {
+          "approver_perm": {
+            "default": "room:approve",
+            "description": "审批人需具备的权限码",
+            "title": "Approver Perm",
+            "type": "string"
+          },
+          "level": {
+            "minimum": 1.0,
+            "title": "Level",
+            "type": "integer"
+          },
+          "scope": {
+            "description": "dept：申请人所在院系的审批人",
+            "enum": [
+              "dept",
+              "school"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "timeout_hours": {
+            "default": 48,
+            "minimum": 1.0,
+            "title": "Timeout Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "level",
+          "scope"
+        ],
+        "title": "FlowLevel",
+        "type": "object"
+      },
+      "Page_ApplicationForApprover_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationForApprover"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[ApplicationForApprover]",
+        "type": "object"
+      },
+      "Page_Application_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Application"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[Application]",
+        "type": "object"
+      },
+      "RoomSettings": {
+        "properties": {
+          "advance_days_max": {
+            "default": 30,
+            "description": "最多提前几天申请",
+            "minimum": 1.0,
+            "title": "Advance Days Max",
+            "type": "integer"
+          },
+          "advance_days_min": {
+            "default": 1,
+            "description": "至少提前几天申请",
+            "minimum": 0.0,
+            "title": "Advance Days Min",
+            "type": "integer"
+          },
+          "max_violations": {
+            "default": 3,
+            "description": "近 violation_window_days 天违约达到该次数不能申请",
+            "minimum": 0.0,
+            "title": "Max Violations",
+            "type": "integer"
+          },
+          "violation_window_days": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Violation Window Days",
+            "type": "integer"
+          }
+        },
+        "title": "RoomSettings",
+        "type": "object"
+      },
+      "UserBrief": {
+        "properties": {
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "dept_id"
+        ],
+        "title": "UserBrief",
+        "type": "object"
+      },
+      "VersionInfo": {
+        "properties": {
+          "env": {
+            "title": "Env",
+            "type": "string"
+          },
+          "git_sha": {
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "version",
+          "git_sha",
+          "env"
+        ],
+        "title": "VersionInfo",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "权限门槛、申请提交、多级审批（通过/驳回）、超时自动撤销；审批通过后经 M1 占用教室。",
+    "title": "M2 整教室预约与审批",
+    "version": "contract"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/room/applications": {
+      "post": {
+        "description": "校验：资格、教室允许整室预约、提前天数、与其他 pending/approved 申请时段不冲突。\n匹配审批流并快照到申请上，进入第 1 级审批。",
+        "operationId": "submit_api_v1_room_applications_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "提交整教室申请",
+        "tags": [
+          "申请"
+        ]
+      }
+    },
+    "/api/v1/room/applications/mine": {
+      "get": {
+        "operationId": "mine_api_v1_room_applications_mine_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "rejected",
+                    "withdrawn",
+                    "expired",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Application_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "我的申请",
+        "tags": [
+          "申请"
+        ]
+      }
+    },
+    "/api/v1/room/applications/{application_id}": {
+      "get": {
+        "operationId": "detail_api_v1_room_applications__application_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "申请详情（含审批记录）",
+        "tags": [
+          "申请"
+        ]
+      }
+    },
+    "/api/v1/room/applications/{application_id}/approve": {
+      "post": {
+        "description": "非最后一级：进入下一级并刷新 deadline_at。\n最后一级：调用 M1 POST /internal/v1/blocks 占用教室，成功后才把状态改为 approved；\nM1 调用失败则本地不变，返回 502。",
+        "operationId": "approve_api_v1_room_applications__application_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "审批通过",
+        "tags": [
+          "审批与配置"
+        ]
+      }
+    },
+    "/api/v1/room/applications/{application_id}/reject": {
+      "post": {
+        "operationId": "reject_api_v1_room_applications__application_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "驳回",
+        "tags": [
+          "审批与配置"
+        ]
+      }
+    },
+    "/api/v1/room/applications/{application_id}/withdraw": {
+      "post": {
+        "description": "pending → withdrawn；approved → cancelled 并调用 M1 释放占用。",
+        "operationId": "withdraw_api_v1_room_applications__application_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "撤回申请",
+        "tags": [
+          "申请"
+        ]
+      }
+    },
+    "/api/v1/room/approvals/todo": {
+      "get": {
+        "description": "当前级别 scope=dept 时只列出申请人与审批人同院系的申请。",
+        "operationId": "todo_api_v1_room_approvals_todo_get",
+        "parameters": [
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ApplicationForApprover_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "我的待审批",
+        "tags": [
+          "审批与配置"
+        ]
+      }
+    },
+    "/api/v1/room/eligibility": {
+      "get": {
+        "description": "门槛：拥有 room:apply 权限，且近 violation_window_days 天在 M1 的违约次数 < max_violations。",
+        "operationId": "eligibility_api_v1_room_eligibility_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Eligibility"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "检查我是否有资格申请整教室",
+        "tags": [
+          "申请"
+        ]
+      }
+    },
+    "/api/v1/room/flows": {
+      "get": {
+        "operationId": "get_flows_api_v1_room_flows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalFlow"
+                  },
+                  "title": "Response Get Flows Api V1 Room Flows Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "审批流配置",
+        "tags": [
+          "审批与配置"
+        ]
+      },
+      "put": {
+        "description": "只影响之后提交的申请，在途申请使用提交时的快照。",
+        "operationId": "put_flows_api_v1_room_flows_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/ApprovalFlow"
+                },
+                "title": "Body",
+                "type": "array"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalFlow"
+                  },
+                  "title": "Response Put Flows Api V1 Room Flows Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "更新审批流配置",
+        "tags": [
+          "审批与配置"
+        ]
+      }
+    },
+    "/api/v1/room/settings": {
+      "get": {
+        "operationId": "get_settings_api_v1_room_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "申请参数",
+        "tags": [
+          "审批与配置"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_v1_room_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "更新申请参数",
+        "tags": [
+          "审批与配置"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "存活检查",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "就绪检查：数据库可用",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "version_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "当前运行版本",
+        "tags": [
+          "ops"
+        ]
+      }
+    }
+  }
+}

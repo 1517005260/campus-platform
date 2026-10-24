@@ -1,0 +1,71 @@
+# 跨模块消息契约。payload 结构以 schemas.json 为准（由 campus_common/events.py 自动导出）。
+# 改动规则：只能给 payload 加可选字段；不兼容的改动新建 version=2 的消息类型。
+asyncapi: 3.0.0
+info:
+  title: 校园资源服务平台 · 跨模块消息
+  version: 1.0.0
+  description: |
+    所有消息发布到 RabbitMQ topic exchange `campus.events`，路由键等于消息 type。
+    生产方用 outbox 保证"业务成功则消息必发"，消费方用 inbox 按 message_id 去重。
+    拓扑由 campus_common/topology.py 统一定义，所有进程启动时声明；路由不到任何队列的消息
+    经备用交换机进入 `campus.events.unrouted`。消费失败按错误分类处理：永久错误直接进死信队列
+    `campus.dlq.<队列名>`，临时错误经 `<队列名>.retry.<N>s` 延迟重试，详见 ADR-010。
+    消息体统一为 Envelope（schemas.json#/Envelope），下文各消息的 payload 指 Envelope.payload 字段。
+
+servers:
+  rabbitmq:
+    host: rabbitmq:5672
+    protocol: amqp
+
+channels:
+  notification.send:
+    address: notification.send
+    description: 请求给用户发送站内通知/邮件。生产方：全部服务；消费方：common（队列 common.notification.send）
+    messages:
+      NotificationSend:
+        $ref: '#/components/messages/NotificationSend'
+  audit.record:
+    address: audit.record
+    description: 记录一条操作审计。生产方：全部服务；消费方：common（队列 common.audit.record）
+    messages:
+      AuditRecord:
+        $ref: '#/components/messages/AuditRecord'
+  m1.reservation.cancelled:
+    address: m1.reservation.cancelled
+    description: 个人预约被取消（用户取消 / 未签到 / 被 M2、M3 占用）。生产方：m1-seat；当前无必需消费者
+    messages:
+      ReservationCancelled:
+        $ref: '#/components/messages/ReservationCancelled'
+  m2.application.status_changed:
+    address: m2.application.status_changed
+    description: 整教室申请状态变化。生产方：m2-room；当前无必需消费者
+    messages:
+      ApplicationStatusChanged:
+        $ref: '#/components/messages/ApplicationStatusChanged'
+  m3.workorder.status_changed:
+    address: m3.workorder.status_changed
+    description: 报修工单状态变化。生产方：m3-repair；当前无必需消费者
+    messages:
+      WorkOrderStatusChanged:
+        $ref: '#/components/messages/WorkOrderStatusChanged'
+
+operations:
+  consumeNotification:
+    action: receive
+    channel: { $ref: '#/channels/notification.send' }
+  consumeAudit:
+    action: receive
+    channel: { $ref: '#/channels/audit.record' }
+
+components:
+  messages:
+    NotificationSend:
+      payload: { $ref: './schemas.json#/notification.send' }
+    AuditRecord:
+      payload: { $ref: './schemas.json#/audit.record' }
+    ReservationCancelled:
+      payload: { $ref: './schemas.json#/m1.reservation.cancelled' }
+    ApplicationStatusChanged:
+      payload: { $ref: './schemas.json#/m2.application.status_changed' }
+    WorkOrderStatusChanged:
+      payload: { $ref: './schemas.json#/m3.workorder.status_changed' }

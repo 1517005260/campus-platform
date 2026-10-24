@@ -1,0 +1,4546 @@
+{
+  "components": {
+    "schemas": {
+      "CheckInRequest": {
+        "properties": {
+          "code": {
+            "description": "教室屏幕上显示的签到码",
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "CheckInRequest",
+        "type": "object"
+      },
+      "CheckinCodeOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "qr_payload": {
+            "description": "二维码内容，微信扫码签到用",
+            "title": "Qr Payload",
+            "type": "string"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "valid_date": {
+            "format": "date",
+            "title": "Valid Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id",
+          "code",
+          "qr_payload",
+          "valid_date"
+        ],
+        "title": "CheckinCodeOut",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "HourRange": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "end_hour": {
+            "description": "结束整点（不含）",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "End Hour",
+            "type": "integer"
+          },
+          "start_hour": {
+            "description": "开始整点",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Start Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "start_hour",
+          "end_hour"
+        ],
+        "title": "HourRange",
+        "type": "object"
+      },
+      "HourState": {
+        "properties": {
+          "hour": {
+            "title": "Hour",
+            "type": "integer"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "M1_RESERVATION",
+                  "M1_ADMIN",
+                  "M2_OCCUPY",
+                  "M3_MAINTENANCE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "enum": [
+              "free",
+              "reserved",
+              "blocked",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hour",
+          "state"
+        ],
+        "title": "HourState",
+        "type": "object"
+      },
+      "InternalBlockCreate": {
+        "properties": {
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "为空表示结束时间未知（维修中）",
+            "title": "End At"
+          },
+          "reason": {
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          },
+          "ref_id": {
+            "description": "M2 申请 ID 或 M3 工单 ID",
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "M2_OCCUPY",
+              "M3_MAINTENANCE"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id",
+          "start_at",
+          "source",
+          "ref_id",
+          "reason"
+        ],
+        "title": "InternalBlockCreate",
+        "type": "object"
+      },
+      "InternalBlockResult": {
+        "properties": {
+          "block_id": {
+            "title": "Block Id",
+            "type": "integer"
+          },
+          "cancelled_reservations": {
+            "description": "因本次占用被取消的个人预约（已通知学生，不记违约）",
+            "items": {
+              "$ref": "#/components/schemas/Reservation"
+            },
+            "title": "Cancelled Reservations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "block_id",
+          "cancelled_reservations"
+        ],
+        "title": "InternalBlockResult",
+        "type": "object"
+      },
+      "InternalReleaseResult": {
+        "properties": {
+          "released": {
+            "description": "false 表示本来就没有该占用，重复调用也不报错",
+            "title": "Released",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "released"
+        ],
+        "title": "InternalReleaseResult",
+        "type": "object"
+      },
+      "InternalViolationCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "count"
+        ],
+        "title": "InternalViolationCount",
+        "type": "object"
+      },
+      "OpenHour": {
+        "properties": {
+          "close_hour": {
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Close Hour",
+            "type": "integer"
+          },
+          "open_hour": {
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Open Hour",
+            "type": "integer"
+          },
+          "weekday": {
+            "description": "0 = 周一",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Weekday",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weekday",
+          "open_hour",
+          "close_hour"
+        ],
+        "title": "OpenHour",
+        "type": "object"
+      },
+      "Page_ReservationDetail_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReservationDetail"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[ReservationDetail]",
+        "type": "object"
+      },
+      "Page_Room_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Room"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[Room]",
+        "type": "object"
+      },
+      "Page_SeatSearchItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SeatSearchItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[SeatSearchItem]",
+        "type": "object"
+      },
+      "Page_ViolationOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ViolationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[ViolationOut]",
+        "type": "object"
+      },
+      "Reservation": {
+        "properties": {
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "checked_in_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked In At"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "seat_id": {
+            "title": "Seat Id",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "booked",
+              "checked_in",
+              "completed",
+              "cancelled",
+              "no_show"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "seat_id",
+          "room_id",
+          "start_at",
+          "end_at",
+          "status"
+        ],
+        "title": "Reservation",
+        "type": "object"
+      },
+      "ReservationCreate": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "end_hour": {
+            "description": "结束整点（不含）",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "End Hour",
+            "type": "integer"
+          },
+          "seat_id": {
+            "title": "Seat Id",
+            "type": "integer"
+          },
+          "start_hour": {
+            "description": "开始整点",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Start Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "start_hour",
+          "end_hour",
+          "seat_id"
+        ],
+        "title": "ReservationCreate",
+        "type": "object"
+      },
+      "ReservationDetail": {
+        "properties": {
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "checked_in_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked In At"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "room": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "seat": {
+            "$ref": "#/components/schemas/Seat"
+          },
+          "seat_id": {
+            "title": "Seat Id",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "booked",
+              "checked_in",
+              "completed",
+              "cancelled",
+              "no_show"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "seat_id",
+          "room_id",
+          "start_at",
+          "end_at",
+          "status",
+          "seat",
+          "room"
+        ],
+        "title": "ReservationDetail",
+        "type": "object"
+      },
+      "Room": {
+        "properties": {
+          "building": {
+            "examples": [
+              "第三教学楼"
+            ],
+            "maxLength": 50,
+            "title": "Building",
+            "type": "string"
+          },
+          "capacity": {
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "为空表示全校开放；否则只对本院系开放",
+            "title": "Dept Id"
+          },
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_study_room": {
+            "default": true,
+            "title": "Is Study Room",
+            "type": "boolean"
+          },
+          "is_whole_bookable": {
+            "default": false,
+            "description": "是否允许 M2 整教室申请",
+            "title": "Is Whole Bookable",
+            "type": "boolean"
+          },
+          "name": {
+            "examples": [
+              "H3106"
+            ],
+            "maxLength": 50,
+            "title": "Name",
+            "type": "string"
+          },
+          "open_hours": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OpenHour"
+            },
+            "title": "Open Hours",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "classroom",
+              "library",
+              "other"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "building",
+          "floor",
+          "name",
+          "type",
+          "capacity",
+          "id",
+          "status"
+        ],
+        "title": "Room",
+        "type": "object"
+      },
+      "RoomCreate": {
+        "properties": {
+          "building": {
+            "examples": [
+              "第三教学楼"
+            ],
+            "maxLength": 50,
+            "title": "Building",
+            "type": "string"
+          },
+          "capacity": {
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "为空表示全校开放；否则只对本院系开放",
+            "title": "Dept Id"
+          },
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "is_study_room": {
+            "default": true,
+            "title": "Is Study Room",
+            "type": "boolean"
+          },
+          "is_whole_bookable": {
+            "default": false,
+            "description": "是否允许 M2 整教室申请",
+            "title": "Is Whole Bookable",
+            "type": "boolean"
+          },
+          "name": {
+            "examples": [
+              "H3106"
+            ],
+            "maxLength": 50,
+            "title": "Name",
+            "type": "string"
+          },
+          "open_hours": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OpenHour"
+            },
+            "title": "Open Hours",
+            "type": "array"
+          },
+          "type": {
+            "enum": [
+              "classroom",
+              "library",
+              "other"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "building",
+          "floor",
+          "name",
+          "type",
+          "capacity"
+        ],
+        "title": "RoomCreate",
+        "type": "object"
+      },
+      "RoomDetail": {
+        "properties": {
+          "building": {
+            "examples": [
+              "第三教学楼"
+            ],
+            "maxLength": 50,
+            "title": "Building",
+            "type": "string"
+          },
+          "capacity": {
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "为空表示全校开放；否则只对本院系开放",
+            "title": "Dept Id"
+          },
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_study_room": {
+            "default": true,
+            "title": "Is Study Room",
+            "type": "boolean"
+          },
+          "is_whole_bookable": {
+            "default": false,
+            "description": "是否允许 M2 整教室申请",
+            "title": "Is Whole Bookable",
+            "type": "boolean"
+          },
+          "name": {
+            "examples": [
+              "H3106"
+            ],
+            "maxLength": 50,
+            "title": "Name",
+            "type": "string"
+          },
+          "open_hours": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OpenHour"
+            },
+            "title": "Open Hours",
+            "type": "array"
+          },
+          "seats": {
+            "items": {
+              "$ref": "#/components/schemas/Seat"
+            },
+            "title": "Seats",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "classroom",
+              "library",
+              "other"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "building",
+          "floor",
+          "name",
+          "type",
+          "capacity",
+          "id",
+          "status",
+          "seats"
+        ],
+        "title": "RoomDetail",
+        "type": "object"
+      },
+      "RoomUpdate": {
+        "properties": {
+          "building": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building"
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "is_study_room": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Study Room"
+          },
+          "is_whole_bookable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Whole Bookable"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "open_hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OpenHour"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Hours"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "enabled",
+                  "disabled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "classroom",
+                  "library",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "title": "RoomUpdate",
+        "type": "object"
+      },
+      "RoomUsage": {
+        "properties": {
+          "no_show_rate": {
+            "title": "No Show Rate",
+            "type": "number"
+          },
+          "reservations": {
+            "title": "Reservations",
+            "type": "integer"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "utilization": {
+            "title": "Utilization",
+            "type": "number"
+          }
+        },
+        "required": [
+          "room_id",
+          "utilization",
+          "no_show_rate",
+          "reservations"
+        ],
+        "title": "RoomUsage",
+        "type": "object"
+      },
+      "Seat": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "outlet": {
+            "description": "none 无插座；fixed 靠近固定插座；rail 靠近移动导轨插座",
+            "enum": [
+              "none",
+              "fixed",
+              "rail"
+            ],
+            "title": "Outlet",
+            "type": "string"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "room_id",
+          "code",
+          "outlet",
+          "status"
+        ],
+        "title": "Seat",
+        "type": "object"
+      },
+      "SeatAvailability": {
+        "properties": {
+          "hours": {
+            "items": {
+              "$ref": "#/components/schemas/HourState"
+            },
+            "title": "Hours",
+            "type": "array"
+          },
+          "seat_id": {
+            "title": "Seat Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seat_id",
+          "hours"
+        ],
+        "title": "SeatAvailability",
+        "type": "object"
+      },
+      "SeatCreate": {
+        "properties": {
+          "code": {
+            "examples": [
+              "A-01"
+            ],
+            "maxLength": 20,
+            "title": "Code",
+            "type": "string"
+          },
+          "outlet": {
+            "default": "none",
+            "enum": [
+              "none",
+              "fixed",
+              "rail"
+            ],
+            "title": "Outlet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "SeatCreate",
+        "type": "object"
+      },
+      "SeatSearchItem": {
+        "properties": {
+          "room": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "seat": {
+            "$ref": "#/components/schemas/Seat"
+          }
+        },
+        "required": [
+          "seat",
+          "room"
+        ],
+        "title": "SeatSearchItem",
+        "type": "object"
+      },
+      "SeatSettings": {
+        "description": "可调系统参数，括号内为默认值。",
+        "properties": {
+          "auto_cancel_min": {
+            "default": 15,
+            "description": "开始后多少分钟未签到自动取消并记违约",
+            "minimum": 1.0,
+            "title": "Auto Cancel Min",
+            "type": "integer"
+          },
+          "max_hours": {
+            "default": 4,
+            "description": "单次预约最多小时数",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Max Hours",
+            "type": "integer"
+          },
+          "remind_before_min": {
+            "default": 15,
+            "description": "开始前多少分钟提醒",
+            "minimum": 0.0,
+            "title": "Remind Before Min",
+            "type": "integer"
+          },
+          "remind_late_min": {
+            "default": 10,
+            "description": "开始后多少分钟未签到再次提醒",
+            "minimum": 0.0,
+            "title": "Remind Late Min",
+            "type": "integer"
+          }
+        },
+        "title": "SeatSettings",
+        "type": "object"
+      },
+      "SeatUpdate": {
+        "properties": {
+          "outlet": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "fixed",
+                  "rail"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outlet"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "enabled",
+                  "disabled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "SeatUpdate",
+        "type": "object"
+      },
+      "StatusHistoryItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At"
+          },
+          "ref_id": {
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "M1_RESERVATION",
+              "M1_ADMIN",
+              "M2_OCCUPY",
+              "M3_MAINTENANCE"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "state": {
+            "enum": [
+              "reserved",
+              "released",
+              "blocked",
+              "unblocked"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "state",
+          "source",
+          "ref_id",
+          "start_at",
+          "end_at"
+        ],
+        "title": "StatusHistoryItem",
+        "type": "object"
+      },
+      "UsageStats": {
+        "properties": {
+          "by_hour": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "各整点的平均利用率",
+            "title": "By Hour",
+            "type": "object"
+          },
+          "by_room": {
+            "items": {
+              "$ref": "#/components/schemas/RoomUsage"
+            },
+            "title": "By Room",
+            "type": "array"
+          },
+          "no_show_rate": {
+            "title": "No Show Rate",
+            "type": "number"
+          },
+          "utilization": {
+            "description": "已签到小时数 / 可预约小时数",
+            "title": "Utilization",
+            "type": "number"
+          }
+        },
+        "required": [
+          "utilization",
+          "no_show_rate",
+          "by_room",
+          "by_hour"
+        ],
+        "title": "UsageStats",
+        "type": "object"
+      },
+      "VersionInfo": {
+        "properties": {
+          "env": {
+            "title": "Env",
+            "type": "string"
+          },
+          "git_sha": {
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "version",
+          "git_sha",
+          "env"
+        ],
+        "title": "VersionInfo",
+        "type": "object"
+      },
+      "ViolationOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reservation_id": {
+            "title": "Reservation Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reservation_id",
+          "created_at"
+        ],
+        "title": "ViolationOut",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "座位搜索、预约、签到、违约记录、历史复用；空间与座位主数据；座位状态写入来源追溯。",
+    "title": "M1 自习座位预约",
+    "version": "contract"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/seat/reservations": {
+      "post": {
+        "description": "校验：整点、时长不超过 max_hours、在开放时间内、院系准入、座位与本人时段均无冲突、\n无 M2/M3 占用。冲突返回 409 SEAT_NOT_AVAILABLE / USER_TIME_CONFLICT。",
+        "operationId": "create_reservation_api_v1_seat_reservations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "预约座位",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/api/v1/seat/reservations/mine": {
+      "get": {
+        "operationId": "my_reservations_api_v1_seat_reservations_mine_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "booked",
+                    "checked_in",
+                    "completed",
+                    "cancelled",
+                    "no_show"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ReservationDetail_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "我的预约历史",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/api/v1/seat/reservations/{reservation_id}/cancel": {
+      "post": {
+        "operationId": "cancel_reservation_api_v1_seat_reservations__reservation_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "取消预约",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/api/v1/seat/reservations/{reservation_id}/check-in": {
+      "post": {
+        "description": "签到窗口：开始前 15 分钟至开始后 auto_cancel_min 分钟。签到码错误返回 400 CHECKIN_CODE_INVALID。",
+        "operationId": "check_in_api_v1_seat_reservations__reservation_id__check_in_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "签到",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/api/v1/seat/reservations/{reservation_id}/rebook": {
+      "post": {
+        "operationId": "rebook_api_v1_seat_reservations__reservation_id__rebook_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HourRange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reservation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "按历史预约再次预约同一座位",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/api/v1/seat/rooms": {
+      "get": {
+        "description": "院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）。",
+        "operationId": "list_rooms_api_v1_seat_rooms_get",
+        "parameters": [
+          {
+            "description": "楼宇名称",
+            "in": "query",
+            "name": "building",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "楼宇名称",
+              "title": "Building"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "classroom",
+                    "library",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_study_room",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Study Room"
+            }
+          },
+          {
+            "description": "M2 申请选教室时传 true",
+            "in": "query",
+            "name": "is_whole_bookable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "M2 申请选教室时传 true",
+              "title": "Is Whole Bookable"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Room_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "查询自习室列表",
+        "tags": [
+          "自习室与座位"
+        ]
+      },
+      "post": {
+        "operationId": "create_room_api_v1_seat_rooms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "登记自习室",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/rooms/{room_id}": {
+      "get": {
+        "operationId": "get_room_api_v1_seat_rooms__room_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "自习室详情（含座位）",
+        "tags": [
+          "自习室与座位"
+        ]
+      },
+      "patch": {
+        "operationId": "update_room_api_v1_seat_rooms__room_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "修改自习室（含开放时间、启用/停用）",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/rooms/{room_id}/availability": {
+      "get": {
+        "operationId": "room_availability_api_v1_seat_rooms__room_id__availability_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeatAvailability"
+                  },
+                  "title": "Response Room Availability Api V1 Seat Rooms  Room Id  Availability Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "某天各座位按小时的状态",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/rooms/{room_id}/checkin-code": {
+      "get": {
+        "operationId": "get_checkin_code_api_v1_seat_rooms__room_id__checkin_code_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckinCodeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "当日签到码（教室屏幕用）",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/rooms/{room_id}/seats": {
+      "post": {
+        "operationId": "create_seat_api_v1_seat_rooms__room_id__seats_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "登记座位",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/seats/search": {
+      "get": {
+        "description": "只返回该时段真正可约的座位：座位启用、在开放时间内、无有效预约、无 M2/M3 占用。",
+        "operationId": "search_seats_api_v1_seat_seats_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_hour",
+            "required": true,
+            "schema": {
+              "maximum": 23,
+              "minimum": 0,
+              "title": "Start Hour",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_hour",
+            "required": true,
+            "schema": {
+              "maximum": 24,
+              "minimum": 1,
+              "title": "End Hour",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "building",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Building"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "description": "按插座条件筛选",
+            "in": "query",
+            "name": "outlet",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "none",
+                    "fixed",
+                    "rail"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按插座条件筛选",
+              "title": "Outlet"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SeatSearchItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "按条件搜索可预约座位",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/seats/{seat_id}": {
+      "patch": {
+        "operationId": "update_seat_api_v1_seat_seats__seat_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "seat_id",
+            "required": true,
+            "schema": {
+              "title": "Seat Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seat"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "修改座位（插座标记、启用/停用）",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/seats/{seat_id}/status-history": {
+      "get": {
+        "operationId": "seat_status_history_api_v1_seat_seats__seat_id__status_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "seat_id",
+            "required": true,
+            "schema": {
+              "title": "Seat Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StatusHistoryItem"
+                  },
+                  "title": "Response Seat Status History Api V1 Seat Seats  Seat Id  Status History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "座位状态变化及写入来源",
+        "tags": [
+          "自习室与座位"
+        ]
+      }
+    },
+    "/api/v1/seat/settings": {
+      "get": {
+        "operationId": "get_settings_api_v1_seat_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeatSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "查看预约参数",
+        "tags": [
+          "参数与统计"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_v1_seat_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeatSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeatSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "修改预约参数",
+        "tags": [
+          "参数与统计"
+        ]
+      }
+    },
+    "/api/v1/seat/stats/usage": {
+      "get": {
+        "operationId": "usage_stats_api_v1_seat_stats_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "座位利用率与违约率",
+        "tags": [
+          "参数与统计"
+        ]
+      }
+    },
+    "/api/v1/seat/violations/mine": {
+      "get": {
+        "operationId": "my_violations_api_v1_seat_violations_mine_get",
+        "parameters": [
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ViolationOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "我的违约记录",
+        "tags": [
+          "预约与签到"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "存活检查",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/internal/v1/blocks": {
+      "post": {
+        "description": "在 [start_at, end_at) 内下架该教室全部座位，并记录写入来源 (source, ref_id)。\n\n时段内已有的个人预约自动取消（cancel_reason=BLOCKED_BY_M2/M3）、通知学生、不记违约，\n在返回值中列出。同一 (source, ref_id) 重复调用返回同一结果。",
+        "operationId": "create_block_internal_v1_blocks_post",
+        "parameters": [
+          {
+            "description": "例如 m3-order-7-block",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": true,
+            "schema": {
+              "description": "例如 m3-order-7-block",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalBlockCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalBlockResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "占用或下架整间教室",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/blocks/{source}/{ref_id}": {
+      "delete": {
+        "description": "M2 撤销/超时、M3 验收通过时调用。幂等：不存在时返回 released=false。",
+        "operationId": "release_block_internal_v1_blocks__source___ref_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "enum": [
+                "M2_OCCUPY",
+                "M3_MAINTENANCE"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ref_id",
+            "required": true,
+            "schema": {
+              "title": "Ref Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalReleaseResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "释放占用",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/rooms/{room_id}": {
+      "get": {
+        "operationId": "internal_get_room_internal_v1_rooms__room_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Room"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "查询教室",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/rooms/{room_id}/reservations": {
+      "get": {
+        "description": "M2 审批人审批前查看\"批准后会影响多少人\"。",
+        "operationId": "room_reservations_internal_v1_rooms__room_id__reservations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_at",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Start At",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_at",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "End At",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Reservation"
+                  },
+                  "title": "Response Room Reservations Internal V1 Rooms  Room Id  Reservations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "查询时段内的有效个人预约",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/users/{user_id}/violations": {
+      "get": {
+        "operationId": "violation_count_internal_v1_users__user_id__violations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Since",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-service-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalViolationCount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "用户违约次数",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "就绪检查：数据库可用",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "version_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "当前运行版本",
+        "tags": [
+          "ops"
+        ]
+      }
+    }
+  }
+}

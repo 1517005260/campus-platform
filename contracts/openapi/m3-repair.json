@@ -1,0 +1,2105 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptRequest": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "rating": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rating"
+        ],
+        "title": "AcceptRequest",
+        "type": "object"
+      },
+      "CancelRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 200,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "CancelRequest",
+        "type": "object"
+      },
+      "CompleteRequest": {
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "title": "Note",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Photos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "CompleteRequest",
+        "type": "object"
+      },
+      "DispatchRequest": {
+        "properties": {
+          "assignee_id": {
+            "title": "Assignee Id",
+            "type": "integer"
+          },
+          "blocks_room": {
+            "default": false,
+            "description": "开始维修时是否下架整间教室",
+            "title": "Blocks Room",
+            "type": "boolean"
+          },
+          "deadline_at": {
+            "format": "date-time",
+            "title": "Deadline At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignee_id",
+          "deadline_at"
+        ],
+        "title": "DispatchRequest",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "EscalationRule": {
+        "properties": {
+          "notify_perm": {
+            "default": "repair:manage",
+            "description": "升级时通知拥有该权限的人",
+            "title": "Notify Perm",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "dispatched",
+              "in_progress",
+              "pending_acceptance"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timeout_hours": {
+            "minimum": 1.0,
+            "title": "Timeout Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "timeout_hours"
+        ],
+        "title": "EscalationRule",
+        "type": "object"
+      },
+      "OrderCreate": {
+        "properties": {
+          "category": {
+            "examples": [
+              "空调",
+              "照明",
+              "桌椅",
+              "插座",
+              "网络"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 1000,
+            "minLength": 2,
+            "title": "Description",
+            "type": "string"
+          },
+          "photos": {
+            "description": "图片 URL",
+            "items": {
+              "type": "string"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "具体座位；为空表示教室整体问题",
+            "title": "Seat Id"
+          }
+        },
+        "required": [
+          "room_id",
+          "category",
+          "description"
+        ],
+        "title": "OrderCreate",
+        "type": "object"
+      },
+      "Page_WorkOrder_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkOrder"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "Page[WorkOrder]",
+        "type": "object"
+      },
+      "RejectAcceptanceRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RejectAcceptanceRequest",
+        "type": "object"
+      },
+      "RepairSettings": {
+        "properties": {
+          "admin_accept_after_hours": {
+            "default": 72,
+            "description": "报修人超过该时长未验收，管理员可代验收",
+            "title": "Admin Accept After Hours",
+            "type": "integer"
+          },
+          "categories": {
+            "default": [
+              "空调",
+              "照明",
+              "桌椅",
+              "插座",
+              "网络",
+              "其他"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "escalation_rules": {
+            "default": [
+              {
+                "notify_perm": "repair:manage",
+                "status": "dispatched",
+                "timeout_hours": 24
+              },
+              {
+                "notify_perm": "repair:manage",
+                "status": "in_progress",
+                "timeout_hours": 72
+              },
+              {
+                "notify_perm": "repair:manage",
+                "status": "pending_acceptance",
+                "timeout_hours": 72
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/EscalationRule"
+            },
+            "title": "Escalation Rules",
+            "type": "array"
+          }
+        },
+        "title": "RepairSettings",
+        "type": "object"
+      },
+      "TimelineItem": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "submitted",
+                  "dispatched",
+                  "in_progress",
+                  "pending_acceptance",
+                  "closed",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "to_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "submitted",
+                  "dispatched",
+                  "in_progress",
+                  "pending_acceptance",
+                  "closed",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Status"
+          }
+        },
+        "required": [
+          "at",
+          "actor",
+          "action",
+          "from_status",
+          "to_status",
+          "note"
+        ],
+        "title": "TimelineItem",
+        "type": "object"
+      },
+      "UserBrief": {
+        "properties": {
+          "dept_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dept Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "name",
+          "dept_id"
+        ],
+        "title": "UserBrief",
+        "type": "object"
+      },
+      "VersionInfo": {
+        "properties": {
+          "env": {
+            "title": "Env",
+            "type": "string"
+          },
+          "git_sha": {
+            "title": "Git Sha",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "version",
+          "git_sha",
+          "env"
+        ],
+        "title": "VersionInfo",
+        "type": "object"
+      },
+      "WorkOrder": {
+        "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserBrief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks_room": {
+            "description": "维修中是否下架整间教室",
+            "title": "Blocks Room",
+            "type": "boolean"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "escalation_level": {
+            "description": "0 表示未升级，每超时一次 +1",
+            "title": "Escalation Level",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "photos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "reporter": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seat Id"
+          },
+          "status": {
+            "enum": [
+              "submitted",
+              "dispatched",
+              "in_progress",
+              "pending_acceptance",
+              "closed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineItem"
+            },
+            "title": "Timeline",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "reporter",
+          "room_id",
+          "seat_id",
+          "category",
+          "description",
+          "photos",
+          "status",
+          "blocks_room",
+          "assignee",
+          "deadline_at",
+          "escalation_level",
+          "rating",
+          "timeline"
+        ],
+        "title": "WorkOrder",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "故障上报、派单、维修中、超时升级、完工验收与评价；维修中可经 M1 下架整间教室。",
+    "title": "M3 物业报修工单",
+    "version": "contract"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/repair/orders": {
+      "get": {
+        "description": "只有 repair:work 的用户只能看到派给自己的工单。",
+        "operationId": "list_orders_api_v1_repair_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "submitted",
+                    "dispatched",
+                    "in_progress",
+                    "pending_acceptance",
+                    "closed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "room_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Room Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "assignee_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "escalated",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Escalated"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WorkOrder_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "工单列表（调度、维修工、管理）",
+        "tags": [
+          "派单与维修"
+        ]
+      },
+      "post": {
+        "description": "校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。",
+        "operationId": "report_api_v1_repair_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "上报故障",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/mine": {
+      "get": {
+        "operationId": "mine_api_v1_repair_orders_mine_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "submitted",
+                    "dispatched",
+                    "in_progress",
+                    "pending_acceptance",
+                    "closed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WorkOrder_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "我上报的工单",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}": {
+      "get": {
+        "operationId": "detail_api_v1_repair_orders__order_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "工单详情（含时间线）",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/accept": {
+      "post": {
+        "description": "pending_acceptance → closed。报修人本人验收；超过 admin_accept_after_hours 后\nrepair:manage 可代验收。若曾下架教室，调用 M1 释放，成功后才关闭工单。",
+        "operationId": "accept_api_v1_repair_orders__order_id__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "验收通过并评价",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/cancel": {
+      "post": {
+        "description": "只有 submitted 状态可取消，否则 409 ORDER_STATE_CONFLICT。",
+        "operationId": "cancel_api_v1_repair_orders__order_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "取消工单（仅派单前）",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/complete": {
+      "post": {
+        "description": "in_progress → pending_acceptance。教室在验收通过前保持下架。通知报修人验收。",
+        "operationId": "complete_api_v1_repair_orders__order_id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "完工",
+        "tags": [
+          "派单与维修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/dispatch": {
+      "post": {
+        "description": "submitted → dispatched。assignee 必须拥有 repair:work。通知维修工。",
+        "operationId": "dispatch_api_v1_repair_orders__order_id__dispatch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "派单",
+        "tags": [
+          "派单与维修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/reject-acceptance": {
+      "post": {
+        "description": "pending_acceptance → in_progress，教室保持下架。",
+        "operationId": "reject_acceptance_api_v1_repair_orders__order_id__reject_acceptance_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectAcceptanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "验收不通过",
+        "tags": [
+          "报修"
+        ]
+      }
+    },
+    "/api/v1/repair/orders/{order_id}/start": {
+      "post": {
+        "description": "dispatched → in_progress。blocks_room=true 时先调用 M1 下架教室，\n成功后才改状态；M1 失败则本地不变并返回 502。",
+        "operationId": "start_api_v1_repair_orders__order_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrder"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "开始维修",
+        "tags": [
+          "派单与维修"
+        ]
+      }
+    },
+    "/api/v1/repair/settings": {
+      "get": {
+        "operationId": "get_settings_api_v1_repair_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepairSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "报修配置",
+        "tags": [
+          "派单与维修"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_v1_repair_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepairSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepairSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "更新报修配置",
+        "tags": [
+          "派单与维修"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "存活检查",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "就绪检查：数据库可用",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "version_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "当前运行版本",
+        "tags": [
+          "ops"
+        ]
+      }
+    }
+  }
+}

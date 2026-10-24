@@ -1,0 +1,290 @@
+{
+  "Envelope": {
+    "properties": {
+      "message_id": {
+        "format": "uuid",
+        "title": "Message Id",
+        "type": "string"
+      },
+      "occurred_at": {
+        "format": "date-time",
+        "title": "Occurred At",
+        "type": "string"
+      },
+      "payload": {
+        "additionalProperties": true,
+        "title": "Payload",
+        "type": "object"
+      },
+      "producer": {
+        "title": "Producer",
+        "type": "string"
+      },
+      "request_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Request Id"
+      },
+      "type": {
+        "title": "Type",
+        "type": "string"
+      },
+      "version": {
+        "default": 1,
+        "title": "Version",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "type",
+      "producer",
+      "payload"
+    ],
+    "title": "Envelope",
+    "type": "object"
+  },
+  "audit.record": {
+    "properties": {
+      "action": {
+        "description": "动作编码，例如 block.create",
+        "title": "Action",
+        "type": "string"
+      },
+      "actor_id": {
+        "description": "用户 ID、服务名或定时任务名",
+        "title": "Actor Id",
+        "type": "string"
+      },
+      "actor_type": {
+        "enum": [
+          "user",
+          "service",
+          "system"
+        ],
+        "title": "Actor Type",
+        "type": "string"
+      },
+      "after": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "After"
+      },
+      "before": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Before"
+      },
+      "module": {
+        "enum": [
+          "common",
+          "m1",
+          "m2",
+          "m3"
+        ],
+        "title": "Module",
+        "type": "string"
+      },
+      "target_id": {
+        "title": "Target Id",
+        "type": "string"
+      },
+      "target_type": {
+        "title": "Target Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "actor_type",
+      "actor_id",
+      "module",
+      "action",
+      "target_type",
+      "target_id"
+    ],
+    "title": "AuditRecord",
+    "type": "object"
+  },
+  "m1.reservation.cancelled": {
+    "properties": {
+      "reason": {
+        "enum": [
+          "USER",
+          "NO_SHOW",
+          "BLOCKED"
+        ],
+        "title": "Reason",
+        "type": "string"
+      },
+      "reservation_id": {
+        "title": "Reservation Id",
+        "type": "integer"
+      },
+      "user_id": {
+        "title": "User Id",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "reservation_id",
+      "user_id",
+      "reason"
+    ],
+    "title": "ReservationCancelled",
+    "type": "object"
+  },
+  "m2.application.status_changed": {
+    "properties": {
+      "application_id": {
+        "title": "Application Id",
+        "type": "integer"
+      },
+      "from_status": {
+        "title": "From Status",
+        "type": "string"
+      },
+      "to_status": {
+        "title": "To Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "application_id",
+      "from_status",
+      "to_status"
+    ],
+    "title": "ApplicationStatusChanged",
+    "type": "object"
+  },
+  "m3.workorder.status_changed": {
+    "properties": {
+      "from_status": {
+        "title": "From Status",
+        "type": "string"
+      },
+      "order_id": {
+        "title": "Order Id",
+        "type": "integer"
+      },
+      "to_status": {
+        "title": "To Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "order_id",
+      "from_status",
+      "to_status"
+    ],
+    "title": "WorkOrderStatusChanged",
+    "type": "object"
+  },
+  "notification.send": {
+    "$defs": {
+      "Ref": {
+        "description": "消息或通知关联的业务对象，例如 {module: \"m3\", type: \"work_order\", id: 7}。",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "module": {
+            "enum": [
+              "common",
+              "m1",
+              "m2",
+              "m3"
+            ],
+            "title": "Module",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "module",
+          "type",
+          "id"
+        ],
+        "title": "Ref",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "channels": {
+        "default": [
+          "inapp",
+          "email"
+        ],
+        "items": {
+          "enum": [
+            "inapp",
+            "email"
+          ],
+          "type": "string"
+        },
+        "title": "Channels",
+        "type": "array"
+      },
+      "params": {
+        "additionalProperties": true,
+        "description": "模板参数",
+        "title": "Params",
+        "type": "object"
+      },
+      "ref": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Ref"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "template": {
+        "description": "通知模板编码，例如 seat.remind_before",
+        "title": "Template",
+        "type": "string"
+      },
+      "user_ids": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "User Ids",
+        "type": "array"
+      }
+    },
+    "required": [
+      "user_ids",
+      "template"
+    ],
+    "title": "NotificationSend",
+    "type": "object"
+  }
+}
