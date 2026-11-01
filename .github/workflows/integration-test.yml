@@ -1,0 +1,30 @@
+# 手动对测试环境运行跨模块集成测试（每周联调使用）。
+# 与 deploy-test.yml 共用并发组 deploy-test：部署进行中时排队等待，部署也不会在测试中途重建容器。
+name: Integration Test
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "0.11.32" }
+      - name: 跨模块集成测试
+        run: |
+          port="$(grep '^GATEWAY_PORT=' "deploy/env/${ENV_FILE}" | cut -d= -f2)"
+          scripts/integration_test.sh "http://${DEPLOY_HOST}:${port}"
+        env:
+          ENV_FILE: ${{ vars.TEST_ENV_FILE || 'test.env' }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
