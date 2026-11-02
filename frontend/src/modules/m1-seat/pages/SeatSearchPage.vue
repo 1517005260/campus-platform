@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ElMessage } from "element-plus";
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 
 import HourRangePicker, { type HourRange } from "@/core/components/HourRangePicker.vue";
 import { showError } from "@/core/http";
@@ -28,6 +28,9 @@ async function search() {
     loading.value = false;
   }
 }
+
+// 进入页面即按默认时段搜索，不必先点“搜索”
+onMounted(search);
 
 async function reserve(item: SeatSearchItem) {
   try {
