@@ -1,16 +1,13 @@
-# 提交与合并请求自动触发：代码规范 → 测试（含迁移重放、种子幂等）→ 契约检查 → 镜像构建。
-# ci-passed 汇总质量检查，供 owner 合并 main 前查看（不是分支规则的必需检查）。
+# 质量检查：代码规范 → 各服务测试（迁移重放、种子幂等）→ 公共库测试 → 前端 → 镜像构建。
+# 推送 dev 与向 dev 发起的 PR（功能分支）触发。dev → main 的 PR 不再重复运行：
+# PR 的头提交就是 dev 上已检查过的提交，结果直接显示在 PR 页面。契约检查见 contract.yml。
 name: CI
 
 on:
   push:
-    branches: [dev] # 功能分支在 PR 时检查；main 推送由 deploy-test.yml 负责
+    branches: [dev]
   pull_request:
-    branches: [dev, main]
-    # labeled/unlabeled：PR 加上或去掉 breaking-change-approved 标签时重新运行契约检查
-    # edited 包含目标分支变更：PR 从 main 改投 dev（或反向）后重新验证。
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
-  workflow_call:
+    branches: [dev]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -108,21 +105,6 @@ jobs:
       - run: uv sync --frozen --package campus-common --all-extras
       - run: uv run --no-sync pytest libs/campus_common/tests
 
-  contract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with: { fetch-depth: 0 }
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
-        with: { version: "${{ env.UV_VERSION }}", enable-cache: true }
-      - run: uv sync --frozen --all-packages
-      - run: scripts/check_contracts.sh
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-          # 破坏性变更只在 PR 上判定（标签属于 PR）；分支推送只检查漂移
-          CHECK_BREAKING: ${{ github.event_name == 'pull_request' }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -140,7 +122,8 @@ jobs:
       - run: npm run build
 
   docker-build:
-    # 只验证镜像能构建，不推送；推送在 deploy-test.yml 中进行
+    # 只验证镜像能构建、不推送（推送在 deploy-test.yml）；功能分支 PR 跳过，进入 dev 后检查
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -162,10 +145,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   ci-passed:
+    # 汇总结果，供 owner 合并 main 前查看；被跳过的任务（PR 上的 docker-build）不算失败
     if: always()
-    needs: [lint, test, test-lib, contract, frontend, docker-build]
+    needs: [lint, test, test-lib, frontend, docker-build]
     runs-on: ubuntu-latest
     steps:
-      - name: 所有检查必须通过
-        run: |
-          echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success")'
+      - run: echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success" or .result == "skipped")'

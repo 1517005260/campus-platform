@@ -48,16 +48,30 @@ x-m3-caller: &m3-caller
   M1_URL: http://m1-api:8001
   COMMON_URL: http://common-api:8004
 
-x-api-health: &api-health
-  interval: 10s
-  timeout: 5s
-  retries: 30
-  start_period: 20s
+# 每个模块一个镜像，api / worker / beat / consumer 只是启动命令不同；各进程自己声明环境变量、依赖与健康检查
+x-common-image: &common-image
+  <<: *service
+  image: ${REGISTRY}/campus-common:${VERSION}
+x-m1-image: &m1-image
+  <<: *service
+  image: ${REGISTRY}/campus-m1-seat:${VERSION}
+x-m2-image: &m2-image
+  <<: *service
+  image: ${REGISTRY}/campus-m2-room:${VERSION}
+x-m3-image: &m3-image
+  <<: *service
+  image: ${REGISTRY}/campus-m3-repair:${VERSION}
 
 x-api-depends: &api-depends
   postgres: { condition: service_healthy }
   redis: { condition: service_healthy }
   mq-setup: { condition: service_completed_successfully }
+
+x-api-health: &api-health
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
 
 x-worker-health: &worker-health
   # Celery 节点名为 worker@<容器主机名>，ping 不通说明 worker 已失去与 broker 的连接
@@ -138,9 +152,8 @@ services:
       interval: 10s
 
   # ---------- common ----------
-  common-api: &common
-    <<: *service
-    image: ${REGISTRY}/campus-common:${VERSION}
+  common-api:
+    <<: *common-image
     command: ["api"]
     environment:
       <<: [*base-env, *api-env, *common-db]
@@ -152,21 +165,8 @@ services:
       <<: *api-health
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/ready')"]
 
-  common-consumer:
-    <<: *common
-    command: ["consumer"]
-    environment:
-      <<: [*base-env, *common-db]
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    depends_on: { common-api: { condition: service_healthy } }
-
   common-worker:
-    <<: *common
+    <<: *common-image
     command: ["worker"]
     environment:
       <<: [*base-env, *common-db]
@@ -180,18 +180,29 @@ services:
     healthcheck: *worker-health
     depends_on: { common-api: { condition: service_healthy } }
 
+  common-consumer:
+    <<: *common-image
+    command: ["consumer"]
+    environment:
+      <<: [*base-env, *common-db]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on: { common-api: { condition: service_healthy } }
+
+  # beat 只按时投递任务，进程退出即容器退出，由重启策略拉起，因此没有健康检查
   common-beat:
-    # beat 只按时投递任务，不访问数据库；进程退出即容器退出，由重启策略拉起，不另设健康检查
-    <<: *common
+    <<: *common-image
     command: ["beat"]
     environment: *base-env
-    healthcheck: { disable: true }
     depends_on: { common-api: { condition: service_healthy } }
 
   # ---------- M1 ----------
-  m1-api: &m1
-    <<: *service
-    image: ${REGISTRY}/campus-m1-seat:${VERSION}
+  m1-api:
+    <<: *m1-image
     command: ["api"]
     environment:
       <<: [*base-env, *api-env, *m1-db]
@@ -202,24 +213,23 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready')"]
 
   m1-worker:
-    <<: *m1
+    <<: *m1-image
     command: ["worker"]
     environment:
       <<: [*base-env, *m1-db]
     healthcheck: *worker-health
     depends_on: { m1-api: { condition: service_healthy } }
 
+  # beat 只按时投递任务，进程退出即容器退出，由重启策略拉起，因此没有健康检查
   m1-beat:
-    <<: *m1
+    <<: *m1-image
     command: ["beat"]
     environment: *base-env
-    healthcheck: { disable: true }
     depends_on: { m1-api: { condition: service_healthy } }
 
   # ---------- M2 ----------
-  m2-api: &m2
-    <<: *service
-    image: ${REGISTRY}/campus-m2-room:${VERSION}
+  m2-api:
+    <<: *m2-image
     command: ["api"]
     environment:
       <<: [*base-env, *api-env, *m2-db, *m2-caller]
@@ -230,24 +240,23 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/ready')"]
 
   m2-worker:
-    <<: *m2
+    <<: *m2-image
     command: ["worker"]
     environment:
       <<: [*base-env, *m2-db, *m2-caller]
     healthcheck: *worker-health
     depends_on: { m2-api: { condition: service_healthy } }
 
+  # beat 只按时投递任务，进程退出即容器退出，由重启策略拉起，因此没有健康检查
   m2-beat:
-    <<: *m2
+    <<: *m2-image
     command: ["beat"]
     environment: *base-env
-    healthcheck: { disable: true }
     depends_on: { m2-api: { condition: service_healthy } }
 
   # ---------- M3 ----------
-  m3-api: &m3
-    <<: *service
-    image: ${REGISTRY}/campus-m3-repair:${VERSION}
+  m3-api:
+    <<: *m3-image
     command: ["api"]
     environment:
       <<: [*base-env, *api-env, *m3-db, *m3-caller]
@@ -258,18 +267,18 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/ready')"]
 
   m3-worker:
-    <<: *m3
+    <<: *m3-image
     command: ["worker"]
     environment:
       <<: [*base-env, *m3-db, *m3-caller]
     healthcheck: *worker-health
     depends_on: { m3-api: { condition: service_healthy } }
 
+  # beat 只按时投递任务，进程退出即容器退出，由重启策略拉起，因此没有健康检查
   m3-beat:
-    <<: *m3
+    <<: *m3-image
     command: ["beat"]
     environment: *base-env
-    healthcheck: { disable: true }
     depends_on: { m3-api: { condition: service_healthy } }
 
   # ---------- 前端与网关 ----------
