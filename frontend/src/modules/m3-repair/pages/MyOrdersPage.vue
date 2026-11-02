@@ -4,7 +4,7 @@ import { onMounted, ref } from "vue";
 
 import { showError } from "@/core/http";
 
-import { repairApi, type WorkOrder } from "../api";
+import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
 
 const items = ref<WorkOrder[]>([]);
 const showForm = ref(false);
@@ -40,7 +40,9 @@ onMounted(load);
     <el-table-column label="教室" prop="room_id" width="80" />
     <el-table-column label="分类" prop="category" width="100" />
     <el-table-column label="描述" prop="description" />
-    <el-table-column label="状态" prop="status" width="150" />
+    <el-table-column label="状态" width="150">
+      <template #default="{ row }">{{ orderStatusLabel[row.status as WorkOrder["status"]] ?? row.status }}</template>
+    </el-table-column>
   </el-table>
 
   <el-dialog v-model="showForm" title="上报故障" width="480px">

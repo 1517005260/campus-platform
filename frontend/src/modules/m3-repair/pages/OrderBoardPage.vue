@@ -4,7 +4,7 @@ import { onMounted, ref } from "vue";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 
-import { repairApi, type WorkOrder } from "../api";
+import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
 
 const items = ref<WorkOrder[]>([]);
 
@@ -24,7 +24,9 @@ onMounted(async () => {
     <el-table-column label="报修人" prop="reporter.name" width="110" />
     <el-table-column label="教室" prop="room_id" width="80" />
     <el-table-column label="分类" prop="category" width="100" />
-    <el-table-column label="状态" prop="status" width="150" />
+    <el-table-column label="状态" width="150">
+      <template #default="{ row }">{{ orderStatusLabel[row.status as WorkOrder["status"]] ?? row.status }}</template>
+    </el-table-column>
     <el-table-column label="下架教室" width="100">
       <template #default="{ row }">{{ row.blocks_room ? "是" : "否" }}</template>
     </el-table-column>

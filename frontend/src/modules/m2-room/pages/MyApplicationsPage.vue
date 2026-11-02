@@ -4,7 +4,7 @@ import { onMounted, ref } from "vue";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 
-import { roomApi, type Application } from "../api";
+import { applicationStatusLabel, roomApi, type Application } from "../api";
 
 const items = ref<Application[]>([]);
 const eligible = ref<{ eligible: boolean; reasons: string[] } | null>(null);
@@ -38,7 +38,11 @@ onMounted(async () => {
       <template #default="{ row }">{{ fmtTime(row.start_at) }}</template>
     </el-table-column>
     <el-table-column label="用途" prop="purpose" />
-    <el-table-column label="状态" prop="status" width="110" />
+    <el-table-column label="状态" width="110">
+      <template #default="{ row }">{{
+        applicationStatusLabel[row.status as Application["status"]] ?? row.status
+      }}</template>
+    </el-table-column>
     <el-table-column label="审批进度" width="110">
       <template #default="{ row }">{{ row.current_level }} / {{ row.total_levels }}</template>
     </el-table-column>
