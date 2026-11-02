@@ -1,5 +1,6 @@
-# 合并到 main 后：重新跑 CI → 构建并推送镜像（标签为提交号）→ 自动部署测试环境 → 跨模块集成测试
+# 合并到 main 后：并行构建并推送 5 个镜像（标签为提交号）→ 自动部署测试环境 → 跨模块集成测试
 # → 通过后给镜像加 verified-<提交号> 标签。生产发布只接受带该标签的镜像。
+# 不再重跑 CI：main 只经 dev 的 PR 更新，合入的代码已在 dev 上通过 ci.yml。
 # concurrency 保证同一时间只有一次部署，集成测试在部署完成后才运行（等效于"部署窗口"）。
 #
 # 仓库变量（Settings → Variables）：TEST_ENV_FILE 选择测试环境配置，默认 test.env；
@@ -22,30 +23,24 @@ env:
   UV_VERSION: "0.11.32"
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
   build:
-    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+    strategy:
+      matrix:
+        service: [common, m1-seat, m2-room, m3-repair, frontend]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - id: tag
-        run: echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: 镜像仓库路径需小写
-        run: echo "REGISTRY=${REGISTRY,,}" >> "$GITHUB_ENV"
-      - run: scripts/build_and_push.sh "${{ steps.tag.outputs.tag }}"
+      - name: 构建并推送（镜像仓库路径需小写）
+        run: REGISTRY="${REGISTRY,,}" scripts/build_and_push.sh "$(git rev-parse --short=12 HEAD)" "${{ matrix.service }}"
 
   deploy:
     needs: build
@@ -70,7 +65,7 @@ jobs:
         name: 部署
         run: |
           export REGISTRY="${REGISTRY,,}"
-          scripts/deploy.sh test "${{ needs.build.outputs.tag }}"
+          scripts/deploy.sh test "$(git rev-parse --short=12 HEAD)"
         env:
           ENV_FILE: deploy/env/${{ vars.TEST_ENV_FILE || 'test.env' }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -93,13 +88,13 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with: { version: "${{ env.UV_VERSION }}" }
       - name: 跨模块集成测试
-        run: scripts/integration_test.sh "${{ steps.deploy.outputs.gateway_url }}" "${{ needs.build.outputs.tag }}"
+        run: scripts/integration_test.sh "${{ steps.deploy.outputs.gateway_url }}" "$(git rev-parse --short=12 HEAD)"
         env:
           DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
 
   verify:
     # 部署与集成测试都通过后才给镜像加 verified 标签；生产发布只接受带该标签的镜像
-    needs: [build, deploy]
+    needs: deploy
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -114,5 +109,5 @@ jobs:
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: 标记为已验证
         run: |
-          export REGISTRY="${REGISTRY,,}"
-          scripts/retag_images.sh "${{ needs.build.outputs.tag }}" "verified-${{ needs.build.outputs.tag }}"
+          tag="$(git rev-parse --short=12 HEAD)"
+          REGISTRY="${REGISTRY,,}" scripts/retag_images.sh "$tag" "verified-$tag"

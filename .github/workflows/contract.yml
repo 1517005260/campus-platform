@@ -1,0 +1,33 @@
+# 契约检查：从代码导出的接口与消息契约必须与 contracts/ 一致（漂移）；
+# PR 上另与目标分支对比破坏性变更，有破坏性变更时 PR 必须带 breaking-change-approved 标签。
+# 单独成工作流：加减标签只重跑这一项，不重跑整套 CI。
+name: Contract
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev, main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with: { version: "0.11.32", enable-cache: true }
+      - run: uv sync --frozen --all-packages
+      - run: scripts/check_contracts.sh
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          CHECK_BREAKING: ${{ github.event_name == 'pull_request' }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}

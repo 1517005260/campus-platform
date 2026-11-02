@@ -197,17 +197,18 @@ common 消费者 → inbox 表按 message_id 去重（与业务写入同一事�
 ## 8. CI/CD
 
 ```
-dev push / 向 dev、main 的 PR ──► ci.yml（各任务并行，ci-passed 汇总）
+推送 dev / 功能分支向 dev 的 PR ──► ci.yml（各任务并行，ci-passed 汇总）
     lint（ruff、shell 检查）
     test × 4 服务（各用自己的数据库角色：迁移重放、alembic check、回退重放、种子幂等、pytest + 覆盖率）
     test-lib（公共库，含跨模块客户端契约测试）
-    contract（契约漂移；PR 上另查破坏性变更，标签变化会重新触发）
     frontend（类型与契约一致、lint、构建）
-    docker-build
-        └─► ci-passed ── main：dev 发起 PR，owner 1517005260 确认 CI 结果后手动合并
+    docker-build（仅推送 dev 时）
+推送 dev / 向 dev、main 的 PR ──► contract.yml（契约漂移；PR 上另查破坏性变更，加减标签只重跑这一项）
+        ▼
+dev → main 的 PR（直接显示 dev 上同一提交的检查结果）── owner 1517005260 确认后手动合并
         ▼
 合并到 main ──► deploy-test.yml（并发组 deploy-test：同一时间只有一次部署或集成测试）
-    CI → 构建并推送镜像（标签 = 提交号）→ 部署测试环境 → 跨模块集成测试 → 镜像加 verified-<提交号> 标签
+    并行构建并推送 5 个镜像（标签 = 提交号）→ 部署测试环境 → 跨模块集成测试 → 镜像加 verified-<提交号> 标签
         ▼
 发布负责人推送 v1.2.0 标签 ──► deploy-prod.yml
     校验：已配置审批人、提交在 main 上、镜像带 verified 标签 → 打版本标签（不重新构建）
