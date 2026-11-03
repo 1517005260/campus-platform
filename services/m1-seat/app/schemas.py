@@ -39,7 +39,7 @@ class RoomBase(BaseModel):
     capacity: int = Field(ge=1)
     is_study_room: bool = True
     is_whole_bookable: bool = Field(False, description="是否允许 M2 整教室申请")
-    open_hours: list[OpenHour] = Field(default_factory=list)
+    open_hours: list[OpenHour] = []
 
 
 class RoomCreate(RoomBase):
