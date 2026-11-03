@@ -26,7 +26,7 @@ def _open_hours(models: Sequence[RoomOpenHour]) -> list[s.OpenHour]:
     ]
 
 
-def _room_out(room: Room, hours: Sequence[RoomOpenHour]) -> s.Room:
+def room_out(room: Room, hours: Sequence[RoomOpenHour]) -> s.Room:
     return s.Room(
         id=room.id,
         building=room.building,
@@ -60,7 +60,7 @@ def _validate_hours(hours: Sequence[s.OpenHour]) -> None:
         raise AppError(400, "INVALID_OPEN_HOURS", "同一星期不能配置多条开放时间")
 
 
-async def _hours_by_room(session: AsyncSession, room_ids: Sequence[int]) -> dict[int, list[RoomOpenHour]]:
+async def hours_by_room(session: AsyncSession, room_ids: Sequence[int]) -> dict[int, list[RoomOpenHour]]:
     if not room_ids:
         return {}
     rows = (
@@ -86,7 +86,7 @@ async def _room_detail(session: AsyncSession, room: Room) -> s.RoomDetail:
         await session.scalars(select(Seat).where(Seat.room_id == room.id).order_by(Seat.code, Seat.id))
     ).all()
     return s.RoomDetail(
-        **_room_out(room, hours).model_dump(),
+        **room_out(room, hours).model_dump(),
         seats=[s.Seat.model_validate(seat, from_attributes=True) for seat in seats],
     )
 
@@ -121,8 +121,8 @@ async def list_rooms(
             statement.order_by(Room.building, Room.name, Room.id).offset(params.offset).limit(params.size)
         )
     ).all()
-    hours = await _hours_by_room(session, [room.id for room in rooms])
-    return page_of([_room_out(room, hours[room.id]) for room in rooms], total or 0, params)
+    hours = await hours_by_room(session, [room.id for room in rooms])
+    return page_of([room_out(room, hours[room.id]) for room in rooms], total or 0, params)
 
 
 async def get_room(session: AsyncSession, user: CurrentUser, room_id: int) -> s.RoomDetail:
@@ -279,4 +279,4 @@ async def _reload_room(session: AsyncSession, room_id: int) -> s.Room:
     if room is None:
         raise not_found("教室", room_id)
     hours = (await session.scalars(select(RoomOpenHour).where(RoomOpenHour.room_id == room_id))).all()
-    return _room_out(room, hours)
+    return room_out(room, hours)

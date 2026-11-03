@@ -38,5 +38,11 @@ fail_under = 50
 
 [tool.mutmut]
 # 只对核心业务逻辑做变异；随着实现推进把新的业务文件加进来
-source_paths = ["app/block_service.py", "app/jobs.py", "app/room_service.py", "app/rules.py"]
+source_paths = [
+    "app/availability.py",
+    "app/block_service.py",
+    "app/jobs.py",
+    "app/room_service.py",
+    "app/rules.py",
+]
 also_copy = ["app", "alembic.ini", "migrations"]

@@ -5,10 +5,10 @@ from datetime import date
 from campus_common.auth import CurrentUser, CurrentUserDep, require_perm
 from campus_common.db import SessionDep
 from campus_common.errors import ERROR_RESPONSES
-from campus_common.pagination import Page, PageParams, page_of, page_params
+from campus_common.pagination import Page, PageParams, page_params
 from fastapi import APIRouter, Depends, Query
 
-from app import room_service, stubs
+from app import availability, room_service, stubs
 from app import schemas as s
 
 router = APIRouter(prefix="/api/v1/seat", tags=["自习室与座位"], responses=ERROR_RESPONSES)
@@ -81,6 +81,7 @@ async def update_seat(
 @router.get("/seats/search", summary="按条件搜索可预约座位", response_model=Page[s.SeatSearchItem])
 async def search_seats(
     user: CurrentUserDep,
+    session: SessionDep,
     date: date,
     start_hour: int = Query(ge=0, le=23),
     end_hour: int = Query(ge=1, le=24),
@@ -90,8 +91,17 @@ async def search_seats(
     p: PageParams = Depends(page_params),
 ):
     """只返回该时段真正可约的座位：座位启用、在开放时间内、无有效预约、无 M2/M3 占用。"""
-    items = [s.SeatSearchItem(seat=seat, room=stubs.ROOM) for seat in stubs.SEATS]
-    return page_of(items, len(items), p)
+    return await availability.search_seats(
+        session,
+        user,
+        day=date,
+        start_hour=start_hour,
+        end_hour=end_hour,
+        building=building,
+        room_id=room_id,
+        outlet=outlet,
+        params=p,
+    )
 
 
 @router.get(
@@ -99,8 +109,8 @@ async def search_seats(
     summary="某天各座位按小时的状态",
     response_model=list[s.SeatAvailability],
 )
-async def room_availability(room_id: int, date: date, user: CurrentUserDep):
-    return stubs.availability()
+async def room_availability(room_id: int, date: date, user: CurrentUserDep, session: SessionDep):
+    return await availability.room_availability(session, user, room_id, date)
 
 
 @router.get(
@@ -117,6 +127,7 @@ async def get_checkin_code(room_id: int, user=Depends(require_perm("seat:checkin
 )
 async def seat_status_history(
     seat_id: int,
+    session: SessionDep,
     user: CurrentUser = Depends(require_perm("seat:room_manage", "seat:stats")),
 ):
-    return stubs.status_history()
+    return await availability.status_history(session, seat_id)
