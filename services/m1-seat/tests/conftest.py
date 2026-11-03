@@ -33,5 +33,15 @@ def as_screen():
 
 
 @pytest.fixture
+def as_config():
+    return user_headers(settings, perms=["seat:config"], dept_id=1)
+
+
+@pytest.fixture
+def as_stats():
+    return user_headers(settings, perms=["seat:stats"], dept_id=1)
+
+
+@pytest.fixture
 def as_m3():
     return service_headers("m3-repair", M3_KEY, idempotency_key="m3-order-7-block")

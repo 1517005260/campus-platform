@@ -45,6 +45,7 @@ source_paths = [
     "app/jobs.py",
     "app/reservation_service.py",
     "app/room_service.py",
+    "app/stats_service.py",
     "app/rules.py",
 ]
 also_copy = ["app", "alembic.ini", "migrations"]
