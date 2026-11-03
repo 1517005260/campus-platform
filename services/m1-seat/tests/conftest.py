@@ -18,5 +18,10 @@ def as_student():
 
 
 @pytest.fixture
+def as_m2():
+    return service_headers("m2-room", M2_KEY, idempotency_key="m2-app-7-occupy")
+
+
+@pytest.fixture
 def as_m3():
     return service_headers("m3-repair", M3_KEY, idempotency_key="m3-order-7-block")

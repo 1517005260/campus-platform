@@ -189,6 +189,12 @@ class InternalBlockCreate(BaseModel):
     ref_id: int = Field(description="M2 申请 ID 或 M3 工单 ID")
     reason: str = Field(max_length=200)
 
+    @model_validator(mode="after")
+    def _time_order(self):
+        if self.end_at is not None and self.end_at <= self.start_at:
+            raise ValueError("end_at 必须晚于 start_at")
+        return self
+
 
 class InternalBlockResult(BaseModel):
     block_id: int
