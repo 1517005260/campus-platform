@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 
 import pytest
-from app.jobs import mark_no_shows
+from app.jobs import complete_finished, mark_no_shows, send_reminders_before, send_reminders_late
 from app.models import Outbox, Reservation, Room, Seat, SeatStatusLog, Setting, Violation
 from campus_common.timeutil import at_hour
 from sqlalchemy import func, select
@@ -77,3 +77,102 @@ def test_respects_configured_deadline(db, booked):
     db.commit()
     with db.begin():
         assert mark_no_shows(db, START + timedelta(minutes=20)) == []
+
+
+def test_before_reminder_not_sent_before_window(db, booked):
+    with db.begin():
+        assert send_reminders_before(db, START - timedelta(minutes=16)) == []
+    db.expire_all()
+    assert db.get(Reservation, booked.id).reminded_before_at is None
+    assert _count(db, Outbox) == 0
+
+
+def test_before_reminder_sent_at_window_start_once(db, booked):
+    with db.begin():
+        assert send_reminders_before(db, START - timedelta(minutes=15)) == [booked.id]
+    with db.begin():
+        assert send_reminders_before(db, START - timedelta(minutes=14)) == []
+
+    db.expire_all()
+    row = db.get(Reservation, booked.id)
+    assert row.reminded_before_at == START - timedelta(minutes=15)
+    assert _count(db, Outbox, Outbox.type == "notification.send") == 1
+    envelope = db.scalar(select(Outbox)).envelope
+    assert envelope["payload"]["template"] == "seat.remind_before"
+    assert envelope["payload"]["ref"]["id"] == booked.id
+
+
+def test_before_reminder_skipped_after_start(db, booked):
+    with db.begin():
+        assert send_reminders_before(db, START) == []
+    db.expire_all()
+    assert db.get(Reservation, booked.id).reminded_before_at is None
+
+
+def test_before_reminder_respects_configured_window(db, booked):
+    db.add(Setting(key="remind_before_min", value=30))
+    db.commit()
+    with db.begin():
+        assert send_reminders_before(db, START - timedelta(minutes=20)) == [booked.id]
+
+
+def test_late_reminder_not_sent_before_window(db, booked):
+    with db.begin():
+        assert send_reminders_late(db, START + timedelta(minutes=9)) == []
+    db.expire_all()
+    assert db.get(Reservation, booked.id).reminded_late_at is None
+    assert _count(db, Outbox) == 0
+
+
+def test_late_reminder_sent_at_window_start_once(db, booked):
+    with db.begin():
+        assert send_reminders_late(db, START + timedelta(minutes=10)) == [booked.id]
+    with db.begin():
+        assert send_reminders_late(db, START + timedelta(minutes=11)) == []
+
+    db.expire_all()
+    row = db.get(Reservation, booked.id)
+    assert row.reminded_late_at == START + timedelta(minutes=10)
+    assert _count(db, Outbox, Outbox.type == "notification.send") == 1
+    envelope = db.scalar(select(Outbox)).envelope
+    assert envelope["payload"]["template"] == "seat.remind_late"
+
+
+def test_late_reminder_not_sent_at_auto_cancel_deadline(db, booked):
+    with db.begin():
+        assert send_reminders_late(db, START + timedelta(minutes=15)) == []
+    db.expire_all()
+    assert db.get(Reservation, booked.id).reminded_late_at is None
+
+
+def test_late_reminder_ignores_checked_in_reservation(db, booked):
+    booked.status = "checked_in"
+    db.commit()
+    with db.begin():
+        assert send_reminders_late(db, START + timedelta(minutes=10)) == []
+    db.expire_all()
+    assert db.get(Reservation, booked.id).reminded_late_at is None
+
+
+def test_complete_finished_at_end_boundary_once(db, booked):
+    booked.status = "checked_in"
+    db.commit()
+    with db.begin():
+        assert complete_finished(db, booked.end_at - timedelta(seconds=1)) == []
+    with db.begin():
+        assert complete_finished(db, booked.end_at) == [booked.id]
+    with db.begin():
+        assert complete_finished(db, booked.end_at + timedelta(minutes=1)) == []
+
+    db.expire_all()
+    assert db.get(Reservation, booked.id).status == "completed"
+
+
+def test_complete_finished_ignores_unfinished_or_not_checked_in(db, booked):
+    with db.begin():
+        assert complete_finished(db, booked.end_at + timedelta(hours=1)) == []
+
+    booked.status = "checked_in"
+    db.commit()
+    with db.begin():
+        assert complete_finished(db, booked.end_at - timedelta(minutes=1)) == []
