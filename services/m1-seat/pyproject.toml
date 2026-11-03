@@ -42,6 +42,7 @@ source_paths = [
     "app/availability.py",
     "app/block_service.py",
     "app/jobs.py",
+    "app/reservation_service.py",
     "app/room_service.py",
     "app/rules.py",
 ]
