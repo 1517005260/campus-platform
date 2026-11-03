@@ -3,12 +3,13 @@
 from datetime import date
 
 from campus_common.auth import CurrentUser, CurrentUserDep, require_perm
+from campus_common.db import SessionDep
 from campus_common.errors import ERROR_RESPONSES
 from campus_common.pagination import Page, PageParams, page_of, page_params
 from fastapi import APIRouter, Depends, Query
 
+from app import room_service, stubs
 from app import schemas as s
-from app import stubs
 
 router = APIRouter(prefix="/api/v1/seat", tags=["自习室与座位"], responses=ERROR_RESPONSES)
 
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/api/v1/seat", tags=["自习室与座位"], responses
 @router.get("/rooms", summary="查询自习室列表", response_model=Page[s.Room])
 async def list_rooms(
     user: CurrentUserDep,
+    session: SessionDep,
     building: str | None = Query(None, description="楼宇名称"),
     type: s.RoomType | None = None,
     is_study_room: bool | None = None,
@@ -23,32 +25,57 @@ async def list_rooms(
     p: PageParams = Depends(page_params),
 ):
     """院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）。"""
-    return page_of([stubs.ROOM], 1, p)
+    return await room_service.list_rooms(
+        session,
+        user,
+        building=building,
+        type=type,
+        is_study_room=is_study_room,
+        is_whole_bookable=is_whole_bookable,
+        params=p,
+    )
 
 
 @router.get("/rooms/{room_id}", summary="自习室详情（含座位）", response_model=s.RoomDetail)
-async def get_room(room_id: int, user: CurrentUserDep):
-    return s.RoomDetail(**stubs.ROOM.model_dump(), seats=stubs.SEATS)
+async def get_room(room_id: int, user: CurrentUserDep, session: SessionDep):
+    return await room_service.get_room(session, user, room_id)
 
 
 @router.post("/rooms", summary="登记自习室", response_model=s.Room, status_code=201)
-async def create_room(body: s.RoomCreate, user=Depends(require_perm("seat:room_manage"))):
-    return stubs.ROOM
+async def create_room(
+    body: s.RoomCreate, session: SessionDep, user=Depends(require_perm("seat:room_manage"))
+):
+    return await room_service.create_room(session, body)
 
 
 @router.patch("/rooms/{room_id}", summary="修改自习室（含开放时间、启用/停用）", response_model=s.Room)
-async def update_room(room_id: int, body: s.RoomUpdate, user=Depends(require_perm("seat:room_manage"))):
-    return stubs.ROOM
+async def update_room(
+    room_id: int,
+    body: s.RoomUpdate,
+    session: SessionDep,
+    user=Depends(require_perm("seat:room_manage")),
+):
+    return await room_service.update_room(session, room_id, body)
 
 
 @router.post("/rooms/{room_id}/seats", summary="登记座位", response_model=s.Seat, status_code=201)
-async def create_seat(room_id: int, body: s.SeatCreate, user=Depends(require_perm("seat:room_manage"))):
-    return stubs.SEATS[0]
+async def create_seat(
+    room_id: int,
+    body: s.SeatCreate,
+    session: SessionDep,
+    user=Depends(require_perm("seat:room_manage")),
+):
+    return await room_service.create_seat(session, room_id, body)
 
 
 @router.patch("/seats/{seat_id}", summary="修改座位（插座标记、启用/停用）", response_model=s.Seat)
-async def update_seat(seat_id: int, body: s.SeatUpdate, user=Depends(require_perm("seat:room_manage"))):
-    return stubs.SEATS[0]
+async def update_seat(
+    seat_id: int,
+    body: s.SeatUpdate,
+    session: SessionDep,
+    user=Depends(require_perm("seat:room_manage")),
+):
+    return await room_service.update_seat(session, seat_id, body)
 
 
 @router.get("/seats/search", summary="按条件搜索可预约座位", response_model=Page[s.SeatSearchItem])
