@@ -23,6 +23,12 @@ class OpenHour(BaseModel):
     open_hour: int = Field(ge=0, le=23)
     close_hour: int = Field(ge=1, le=24)
 
+    @model_validator(mode="after")
+    def _time_order(self):
+        if self.close_hour <= self.open_hour:
+            raise ValueError("close_hour 必须晚于 open_hour")
+        return self
+
 
 class RoomBase(BaseModel):
     building: str = Field(max_length=50, examples=["第三教学楼"])

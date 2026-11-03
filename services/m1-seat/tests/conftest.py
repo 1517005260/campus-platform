@@ -23,5 +23,10 @@ def as_m2():
 
 
 @pytest.fixture
+def as_room_admin():
+    return user_headers(settings, perms=["seat:room_manage"], dept_id=1)
+
+
+@pytest.fixture
 def as_m3():
     return service_headers("m3-repair", M3_KEY, idempotency_key="m3-order-7-block")
