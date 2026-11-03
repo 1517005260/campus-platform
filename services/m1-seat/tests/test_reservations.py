@@ -325,9 +325,9 @@ def test_cannot_rebook_another_users_history(client, db, as_student):
 
 
 def test_my_violations_returns_only_current_user(client, db, as_student):
-    room, (seat,) = _room(db, seats=2)
-    own = _reserve(db, room, seat[0], start_hour=8, end_hour=9, status="no_show")
-    other = _reserve(db, room, seat[1], user_id=2002, start_hour=10, end_hour=11, status="no_show")
+    room, seats = _room(db, seats=2)
+    own = _reserve(db, room, seats[0], start_hour=8, end_hour=9, status="no_show")
+    other = _reserve(db, room, seats[1], user_id=2002, start_hour=10, end_hour=11, status="no_show")
     db.add_all(
         [Violation(user_id=1001, reservation_id=own.id), Violation(user_id=2002, reservation_id=other.id)]
     )
