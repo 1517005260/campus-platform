@@ -1,11 +1,14 @@
 """跨模块占用、释放和内部查询的行为测试。"""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 import pytest
+from app.main import app
 from app.models import Outbox, Reservation, Room, RoomBlock, RoomOpenHour, Seat, SeatStatusLog, Violation
 from campus_common.testing import service_headers
 from campus_common.timeutil import at_hour
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from tests.conftest import M2_KEY, M3_KEY
@@ -130,6 +133,25 @@ def test_same_idempotency_key_returns_first_result_once(client, db, as_m3):
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
     assert first.json()["cancelled_reservations"][0]["id"] == reservation.id
+    assert _count(db, RoomBlock) == 1
+    assert _count(db, Outbox) == 3
+
+
+def test_concurrent_requests_with_same_key_create_one_block(db, as_m3):
+    room, seat = _seed_room(db, seats=1)
+    reservation = _reserve(db, room, seat[0], user_id=41, start_hour=10, end_hour=11)
+    body = _block_body(room)
+
+    def send():
+        with TestClient(app) as concurrent_client:
+            return concurrent_client.post("/internal/v1/blocks", json=body, headers=as_m3)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda _: send(), range(2)))
+
+    assert all(response.status_code == 200 for response in responses)
+    assert responses[0].json() == responses[1].json()
+    assert responses[0].json()["cancelled_reservations"][0]["id"] == reservation.id
     assert _count(db, RoomBlock) == 1
     assert _count(db, Outbox) == 3
 
