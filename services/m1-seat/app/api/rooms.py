@@ -8,7 +8,7 @@ from campus_common.errors import ERROR_RESPONSES
 from campus_common.pagination import Page, PageParams, page_params
 from fastapi import APIRouter, Depends, Query
 
-from app import availability, room_service, stubs
+from app import availability, checkin_service, room_service
 from app import schemas as s
 
 router = APIRouter(prefix="/api/v1/seat", tags=["自习室与座位"], responses=ERROR_RESPONSES)
@@ -116,8 +116,12 @@ async def room_availability(room_id: int, date: date, user: CurrentUserDep, sess
 @router.get(
     "/rooms/{room_id}/checkin-code", summary="当日签到码（教室屏幕用）", response_model=s.CheckinCodeOut
 )
-async def get_checkin_code(room_id: int, user=Depends(require_perm("seat:checkin_code"))):
-    return stubs.checkin_code(room_id)
+async def get_checkin_code(
+    room_id: int,
+    session: SessionDep,
+    user=Depends(require_perm("seat:checkin_code")),
+):
+    return await checkin_service.get_checkin_code(session, room_id)
 
 
 @router.get(
