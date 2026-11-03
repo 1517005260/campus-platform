@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 pytestmark = pytest.mark.db
-BASE = datetime(2026, 10, 20, 14, 0, tzinfo=BIZ_TZ)
+BASE = datetime.now(BIZ_TZ).replace(second=0, microsecond=0) + timedelta(minutes=5)
 
 
 def _room_with_seat(db) -> tuple[Room, Seat]:
