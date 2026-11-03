@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from campus_common.errors import AppError, not_found
-from campus_common.timeutil import at_hour
+from campus_common.timeutil import BIZ_TZ, at_hour
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,9 +62,10 @@ def _seconds_by_hour(intervals: list[tuple[datetime, datetime]]) -> dict[int, fl
     for start, end in intervals:
         cursor = start
         while cursor < end:
-            next_hour = at_hour(cursor.date(), cursor.hour + 1)
+            local_cursor = cursor.astimezone(BIZ_TZ)
+            next_hour = at_hour(local_cursor.date(), local_cursor.hour + 1)
             segment_end = min(end, next_hour)
-            totals[cursor.hour] += (segment_end - cursor).total_seconds()
+            totals[local_cursor.hour] += (segment_end - cursor).total_seconds()
             cursor = segment_end
     return dict(totals)
 
