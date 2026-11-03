@@ -218,7 +218,7 @@ dev → main 的 PR（直接显示 dev 上同一提交的检查结果）── o
 
 部署通过 SSH 进行，服务器指纹来自 `DEPLOY_KNOWN_HOSTS` 密钥（事先核对），不在部署时临时信任。`v*` 标签只有仓库管理员（发布负责人）能创建，创建后任何人（包括管理员）都不能修改或删除；`retag_images.sh` 拒绝把已有版本标签改指到其他镜像（镜像仓库本身不提供标签不可变，这一点由流水线约定保证）；未配置生产审批人时生产部署直接失败，审批人不能审批自己触发的部署。test 环境只允许 main 使用。每周联调手动运行 `integration-test.yml`，它与部署共用并发组，不会和部署交错。Actions 按提交 SHA 固定。测试环境的配置文件由仓库变量 `TEST_ENV_FILE` 选择（默认 `test.env`，单服务器方案为 `test-single-server.env`），网关端口等全部取自该文件。每周一另有 `mutation.yml` 跑变异测试，报告测试漏掉的代码改动。
 
-协作者从 `dev` 开始开发，有写权限的人可直接提交 dev。`main` 只能通过 PR 更新，只有项目 owner `1517005260` 能合并（使用 merge commit），其他成员的批准不能替代；按约定只从本仓库 `dev` 发起，owner 合并前确认来源与 CI 结果。两条长期分支禁止删除和强推。仅同步分支规则可执行 `python3 scripts/configure_branches.py 1517005260/campus-platform`。
+协作者从 `dev` 开始开发，有写权限的人可直接提交 dev。`main` 只能通过 PR 更新，只有项目 owner `1517005260` 能合并（使用 merge commit），其他成员的批准不能替代；按约定只从本仓库 `dev` 发起，`ci-passed` 必须通过（owner 也不能绕过）。向 `dev` 的 PR 可由任一组员评审，用 rebase 或 squash 合并。两条长期分支禁止删除和强推。仅同步分支规则可执行 `python3 scripts/configure_branches.py 1517005260/campus-platform`。
 
 GitHub 侧配置（分支保护、版本标签保护、环境审批、生产部署引用、标签）全部由 [`scripts/github_setup.sh`](scripts/github_setup.sh) 完成，可重复执行；部署密钥由 [`scripts/gen_secrets.sh`](scripts/gen_secrets.sh) 生成（只补缺少的项）；服务器初始化由 [`deploy/server_init.sh`](deploy/server_init.sh) 完成。
 

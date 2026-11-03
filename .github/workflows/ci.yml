@@ -145,7 +145,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   ci-passed:
-    # 汇总结果，供 owner 合并 main 前查看；被跳过的任务（PR 上的 docker-build）不算失败
+    # 汇总结果，是 main 的必需检查（规则 main-ci）；被跳过的任务（PR 上的 docker-build）不算失败
     if: always()
     needs: [lint, test, test-lib, frontend, docker-build]
     runs-on: ubuntu-latest

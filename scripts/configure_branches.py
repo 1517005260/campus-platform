@@ -38,14 +38,14 @@ def configure(repo: str):
         {
             "allow_merge_commit": True,
             "allow_squash_merge": True,
-            "allow_rebase_merge": False,
+            "allow_rebase_merge": True,
             "delete_branch_on_merge": False,
             "allow_auto_merge": False,
         },
     )
     existing = {rule["name"]: rule["id"] for rule in api(f"{base}/rulesets?per_page=100")}
     directory = Path(__file__).resolve().parent / "github"
-    for filename in ["ruleset-main.json", "ruleset-dev.json"]:
+    for filename in ["ruleset-main.json", "ruleset-main-ci.json", "ruleset-dev.json"]:
         body = json.loads((directory / filename).read_text())
         rule_id = existing.get(body["name"])
         path = f"{base}/rulesets/{rule_id}" if rule_id else f"{base}/rulesets"
