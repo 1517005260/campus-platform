@@ -144,10 +144,10 @@ stateDiagram-v2
 
 | 任务（`jobs.py` 函数） | 频率 | 逻辑 | 防重复 | 状态 |
 |---|---|---|---|---|
-| `send_reminders_before` | 1 分钟 | status=booked、`reminded_before_at IS NULL`、`start_at - remind_before_min <= now < start_at` → 发通知，写 `reminded_before_at` | 字段标记 + SKIP LOCKED | 待实现 |
-| `send_reminders_late` | 1 分钟 | status=booked、`reminded_late_at IS NULL`、`start_at + remind_late_min <= now` → 发通知，写 `reminded_late_at` | 同上 | 待实现 |
+| `send_reminders_before` | 1 分钟 | status=booked、`reminded_before_at IS NULL`、`start_at - remind_before_min <= now < start_at` → 发通知，写 `reminded_before_at` | 字段标记 + SKIP LOCKED | 已实现 |
+| `send_reminders_late` | 1 分钟 | status=booked、`reminded_late_at IS NULL`、`start_at + remind_late_min <= now < start_at + auto_cancel_min` → 发通知，写 `reminded_late_at` | 同上 | 已实现 |
 | `mark_no_shows` | 1 分钟 | 开始后 `auto_cancel_min` 仍未签到 → no_show、释放座位、记违约、通知学生（参考实现，见 `jobs.py`） | 状态条件 + 违约表唯一约束 | 已实现 |
-| `complete_finished` | 5 分钟 | status=checked_in、`end_at <= now` → completed | 状态条件 | 待实现 |
+| `complete_finished` | 5 分钟 | status=checked_in、`end_at <= now` → completed | 状态条件 | 已实现 |
 | `relay_outbox` | 2 秒 | 公共库（`ServiceWorker` 自动注册） | SKIP LOCKED | 已实现 |
 
 服务重启后错过的提醒会在下一轮补发（条件是"已到时间且未提醒"，不是"恰好在这一分钟"）。如果补发时预约已开始，`send_reminders_before` 应跳过（条件含 `now < start_at`）。
@@ -161,21 +161,25 @@ stateDiagram-v2
 | 签到与 no_show 扫描同时发生 | 签到用 `UPDATE ... WHERE id=:id AND status='booked'`；扫描用 SKIP LOCKED，两者只有一个改到 |
 | M3 重试下架 | 幂等键 + (source, ref_id) 唯一 |
 
-## 9. 实现顺序
+## 9. 实现状态
 
-| 顺序 | 内容 | 负责 | 说明 |
-|---|---|---|---|
-| 1 | `/internal/v1/blocks` 真实实现 + 测试 | A | M2、M3 联调依赖它，最先做 |
-| 2 | 教室、座位 CRUD，开放时间 | A | |
-| 3 | 搜索与可用性（含 block 过滤） | A | INT-01/02 的可见效果 |
-| 4 | 创建、取消、历史、再次预约 | A | |
-| 5 | 签到码与签到 | B | |
-| 6 | 提醒任务 | B | 参照 `mark_no_shows` |
-| 7 | 运营统计、参数修改 | B | |
-| 8 | 前端各页面 | B | 随后端接口完成逐步对接 |
+| 内容 | 状态 | 说明 |
+|---|---|---|
+| `/internal/v1/blocks`、释放接口和内部查询 | 已完成 | M2、M3 的 M1 侧接口与单元测试已完成，真实链路待联调 |
+| 教室、座位和开放时间管理 | 已完成 | |
+| 搜索与可用性（含整室占用过滤） | 已完成 | |
+| 创建、取消、历史、再次预约 | 已完成 | |
+| 签到码与签到 | 已完成 | |
+| 提醒、未签到取消和完成扫描 | 已完成 | |
+| 运营统计、参数修改 | 已完成 | |
+| 前端各页面 | 不在 M1 后端范围 | 由前端负责人对接 |
 
-## 10. 待讨论
+## 10. 已确认的 v1 边界
 
-- 最远可提前几天预约？建议 7 天，作为参数 `advance_days_max`。
-- 签到窗口开始时间是否也做成参数？
-- 是否限制每人每天的预约总时长？任务书只限制单次 4 小时，连续预约两段可以绕过"减少疲劳"的初衷，可以记入伦理与需求讨论。
+- 不增加最远提前预约天数限制，保持任务书规定的预约范围和现有接口契约。
+- 不增加每人每天总预约时长限制。连续预约可能绕过单次 4 小时限制，相关问题记录在伦理讨论中。
+- 签到窗口从预约开始前 15 分钟开始，到 `start_at + auto_cancel_min` 之前结束；到达截止时刻后，未签到扫描可以取消预约。
+- 状态日志记录座位可用性变化；签到只改变预约状态，不额外写座位可用性日志。
+- 利用率按已签到预约小时数除以有效开放座位小时数计算；有效开放座位小时数按开放时间和当前启用座位计算，并扣除整室占用时段。
+- 违约率按 `no_show / (no_show + completed)` 计算，分母为 0 时返回 0。
+- 运营统计只返回聚合结果，不返回学生个人自习轨迹。
