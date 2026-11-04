@@ -30,11 +30,9 @@ markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-co
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/stubs.py"]
 
 [tool.coverage.report]
-# 桩阶段的起点；每完成一批真实实现就上调，第二次 Review 前达到 70
-fail_under = 50
+fail_under = 70
 
 [tool.mutmut]
 # 只对核心业务逻辑做变异；随着实现推进把新的业务文件加进来

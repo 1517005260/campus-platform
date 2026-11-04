@@ -85,6 +85,6 @@ def test_block_rejects_naive_datetime(client, as_m3):
     assert resp.status_code == 422
 
 
-def test_request_id_is_echoed(client, as_student):
+def test_request_id_is_echoed(client, db, as_student):
     resp = client.get("/api/v1/seat/rooms", headers={**as_student, "X-Request-ID": "abc123"})
     assert resp.headers["X-Request-ID"] == "abc123"
