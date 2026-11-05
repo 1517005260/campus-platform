@@ -17,6 +17,7 @@ from app import audit
 from app.config import settings
 from app.models import Inbox
 from app.notification_service import new_notification
+from app.rbac import perm_holders
 
 broker = create_broker(settings.rabbitmq_url)
 sessions = make_async_sessionmaker(settings.database_url)
@@ -27,10 +28,13 @@ async def handle_notification(envelope: Envelope) -> None:
     async with sessions() as session, session.begin():
         if not await claim_message(session, Inbox, envelope):
             return
+        recipients = set(payload.user_ids)
+        if payload.perm is not None:
+            recipients.update(user.id for user in await session.scalars(perm_holders(payload.perm)))
         ref = payload.ref.model_dump() if payload.ref else None
         session.add_all(
             new_notification(uid, payload.template, payload.params, channels=payload.channels, ref=ref)
-            for uid in payload.user_ids
+            for uid in sorted(recipients)
         )
 
 

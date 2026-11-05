@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator
 
 OrderStatus = Literal["submitted", "dispatched", "in_progress", "pending_acceptance", "closed", "cancelled"]
 
@@ -86,3 +86,12 @@ class RepairSettings(BaseModel):
         EscalationRule(status="pending_acceptance", timeout_hours=72),
     ]
     admin_accept_after_hours: int = Field(72, description="报修人超过该时长未验收，管理员可代验收")
+
+    @field_validator("escalation_rules")
+    @classmethod
+    def _one_rule_per_status(cls, rules: list[EscalationRule]) -> list[EscalationRule]:
+        # 升级计时起点（上次升级时间）按工单记录，同一状态的多条规则会互相重置计时，因此每个状态只允许一条
+        statuses = [rule.status for rule in rules]
+        if len(statuses) != len(set(statuses)):
+            raise ValueError("每个状态只能配置一条升级规则")
+        return rules

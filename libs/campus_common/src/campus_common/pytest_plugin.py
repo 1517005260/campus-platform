@@ -4,7 +4,10 @@ fixture（在服务目录下运行测试时使用，按约定导入 app.config.s
 - client：FastAPI TestClient；
 - migrated：会话级，迁移到最新版本；
 - db：每个测试从空的服务 schema 开始（清空全部业务表），再执行 db_seed，返回同步会话；
-- db_seed：默认不写数据，服务需要预置数据时在 conftest.py 中覆盖，返回 fn(session)。
+- db_seed：默认不写数据，服务需要预置数据时在 conftest.py 中覆盖，返回 fn(session)；
+- clock：把时钟冻结在 testing.NOW（需要 time-machine），返回 time_machine，用 clock.move_to()/shift() 移动。
+  按需使用；整个服务都用冻结时钟时在 pyproject 的 [tool.pytest.ini_options] 写 usefixtures = ["clock"]。
+  JWT 在冻结的时钟下签发，移动时钟不要超过 token 有效期（8 小时）。
 
 测试库保护：测试只允许连接名称以 _test 结尾的数据库。
 
@@ -74,6 +77,14 @@ def client():
     from fastapi.testclient import TestClient
 
     return TestClient(app)
+
+
+@pytest.fixture
+def clock(time_machine):
+    from campus_common.testing import NOW
+
+    time_machine.move_to(NOW, tick=False)
+    return time_machine
 
 
 @pytest.fixture(scope="session")

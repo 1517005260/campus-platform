@@ -19,7 +19,7 @@ from campus_common.auth import CurrentUser
 from campus_common.db import constraint_errors
 from campus_common.errors import AppError, not_found
 from campus_common.pagination import Page, PageParams, paginate
-from sqlalchemy import func, inspect, select
+from sqlalchemy import Select, func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import audit
@@ -44,6 +44,21 @@ DEPT_ERRORS = {"uq_depts_name": (409, "DEPT_EXISTS", "院系名称已存在")}
 
 
 # ---------------- 通用规则 ----------------
+
+
+def perm_holders(perm: str, dept_id: int | None = None) -> Select[tuple[User]]:
+    """拥有权限码 perm（可再按院系过滤）的启用用户，按 ID 排序。
+
+    服务间按权限查用户的接口与"按权限码寻址的通知"（NotificationSend.perm）共用这一个查询。"""
+    stmt = (
+        select(User)
+        .join(User.roles)
+        .join(Role.perms)
+        .where(Permission.code == perm, User.active.is_(True))
+        .distinct()
+        .order_by(User.id)
+    )
+    return stmt if dept_id is None else stmt.where(User.dept_id == dept_id)
 
 
 async def _by_codes[M: (Role, Permission)](

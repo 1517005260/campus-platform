@@ -100,7 +100,7 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 
 | 队列 | 绑定 | 处理 |
 |---|---|---|
-| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个 user_id 写一条 `notifications` |
+| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个收件人写一条 `notifications`。收件人 = `user_ids` ∪ 拥有 `perm` 的全部启用用户（`perm` 可选，在处理消息时用与 `GET /internal/v1/users?perm=` 相同的查询 `rbac.perm_holders` 解析，同一人只写一条）；发送方因此不必为查收件人同步调用 common |
 | `common.audit.record` | `campus.events` / `audit.record` | 写 `audit_logs`，保留 request_id 与 message_id |
 
 两者都先 `claim_message` 登记 inbox，与业务写入同一事务。队列由公共库 `campus_common.topology` 定义，消费者用 `campus_common.consuming.subscribe()` 注册，失败按错误分类处理（[ADR-010](../adr/010-消息拓扑与失败重试.md)）：

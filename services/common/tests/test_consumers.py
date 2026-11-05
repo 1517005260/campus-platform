@@ -2,8 +2,8 @@
 
 import pytest
 from app.consumers import handle_audit, handle_notification
-from app.models import AuditLog, Notification
-from app.seed import seed_base
+from app.models import AuditLog, Notification, Role, User
+from app.seed import BOOTSTRAP_ADMIN, seed_base
 from campus_common.events import AuditRecord, Envelope, NotificationSend
 from sqlalchemy import func, select
 
@@ -89,6 +89,45 @@ async def test_unknown_template_or_missing_params_still_stored(db, template, par
     await handle_notification(envelope(NotificationSend(user_ids=[1], template=template, params=params)))
     n = db.scalar(select(Notification))
     assert n.title == template and str(next(iter(params.values()))) in n.content
+
+
+def _user(db, user_id: int, role: str, *, active: bool = True) -> None:
+    db.add(
+        User(
+            id=user_id,
+            username=f"u{user_id}",
+            password_hash="x",
+            name=f"用户{user_id}",
+            active=active,
+            roles=[db.get(Role, role)],
+        )
+    )
+    db.commit()
+
+
+async def test_perm_addressed_notification_reaches_active_holders_once(db):
+    _user(db, 50, "repair_dispatcher")
+    _user(db, 51, "repair_dispatcher", active=False)
+    _user(db, 52, "repair_worker")
+    payload = NotificationSend(
+        user_ids=[52, 50],
+        perm="repair:manage",
+        template="repair.escalated",
+        params=ESCALATED,
+    )
+    await handle_notification(envelope(payload))
+    # repair:manage：调度员 50 与系统管理员；停用的 51 不收；50 同时在 user_ids 中也只收一条
+    recipients = db.scalars(select(Notification.user_id).order_by(Notification.user_id)).all()
+    assert recipients == sorted([50, 52, BOOTSTRAP_ADMIN.id])
+
+
+ORDER = {"order_id": 7, "category": "空调"}
+ESCALATED = ORDER | {
+    "status": "in_progress",
+    "since": "2026-11-05T06:00:00+00:00",
+    "timeout_hours": 72,
+    "level": 2,
+}
 
 
 async def test_audit_keeps_request_id(db):

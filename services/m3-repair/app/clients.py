@@ -17,7 +17,9 @@ async def get_room(room_id: int) -> M1Room:
 
 
 async def block_room(order_id: int, room_id: int, start_at: datetime, reason: str) -> M1BlockResult:
-    """开始维修且 blocks_room=true 时下架整间教室；维修结束时间未知（end_at 为空）。"""
+    """开始维修且 blocks_room=true 时下架整间教室；维修结束时间未知（end_at 为空）。
+
+    M1 按幂等键核对请求内容，同一工单的每次调用必须完全相同：start_at 取工单上保存的 block_start_at。"""
     return await m1.create_block(
         source="M3_MAINTENANCE",
         ref_id=order_id,
@@ -34,11 +36,6 @@ async def release_room(order_id: int) -> bool:
     return await m1.release_block("M3_MAINTENANCE", order_id)
 
 
-async def get_user(user_id: int) -> UserBrief:
-    contact = await common.get_user(user_id)
-    return UserBrief(id=contact.id, username=contact.username, name=contact.name, dept_id=contact.dept_id)
-
-
 async def users_with_perm(perm: str) -> list[UserBrief]:
-    """维修工（repair:work）或升级通知对象（repair:manage）。"""
+    """派单时校验维修工（repair:work）。其余按权限通知的对象由 common 在投递通知时解析。"""
     return await common.users_with_perm(perm)
