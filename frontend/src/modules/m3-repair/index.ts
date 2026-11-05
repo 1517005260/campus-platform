@@ -14,10 +14,16 @@ const m: AppModule = {
       component: () => import("./pages/OrderBoardPage.vue"),
       meta: { title: "工单看板", perms: ["repair:dispatch", "repair:work", "repair:manage"] },
     },
+    {
+      path: "/repair/settings",
+      component: () => import("./pages/RepairSettingsPage.vue"),
+      meta: { title: "报修配置", perms: ["repair:manage"] },
+    },
   ],
   menu: [
     { title: "我的报修", path: "/repair/mine", perms: ["repair:report"] },
     { title: "工单看板", path: "/repair/orders", perms: ["repair:dispatch", "repair:work", "repair:manage"] },
+    { title: "报修配置", path: "/repair/settings", perms: ["repair:manage"] },
   ],
 };
 export default m;
