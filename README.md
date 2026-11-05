@@ -10,14 +10,14 @@
 
 | 服务 | 目录 | 端口 | 负责人 | 职责 |
 |---|---|---|---|---|
-| common | `services/common` | 8004 | D（RBAC）、F（通知、审计） | 登录与 JWT 签发、用户/角色/权限/院系、站内通知与邮件、操作审计 |
-| M1 自习座位预约 | `services/m1-seat` | 8001 | A（后端）、B（前端、提醒、统计） | 空间与座位主数据、搜索、预约、签到、违约、提醒；**座位状态的唯一写入方** |
-| M2 整教室预约与审批 | `services/m2-room` | 8002 | C（申请、审批）、D（门槛、配置） | 资格门槛、申请、多级审批、超时撤销；审批通过后经 M1 占用教室 |
-| M3 物业报修工单 | `services/m3-repair` | 8003 | E（工单）、F（通知集成） | 上报、派单、维修中、超时升级、验收评价；维修中经 M1 下架教室 |
-| 前端 | `frontend` | 3000（开发） | B（core 与 M1 页面）、各模块组（各自页面） | Vue 3 单页应用，按模块分目录，见 [`docs/design/frontend.md`](docs/design/frontend.md) |
-| 网关 | `deploy/gateway` | 8000 | E | 唯一对外入口，按路径转发，不转发 `/internal` |
+| common | `services/common` | 8004 | `1517005260` | 登录与 JWT 签发、用户/角色/权限/院系、站内通知与邮件、操作审计 |
+| M1 自习座位预约 | `services/m1-seat` | 8001 | `cyuanb` | 空间与座位主数据、搜索、预约、签到、违约、提醒；**座位状态的唯一写入方** |
+| M2 整教室预约与审批 | `services/m2-room` | 8002 | A | 资格门槛、申请、多级审批、超时撤销；审批通过后经 M1 占用教室 |
+| M3 物业报修工单 | `services/m3-repair` | 8003 | B | 上报、派单、维修中、超时升级、验收评价；维修中经 M1 下架教室 |
+| 前端 | `frontend` | 3000（开发） | C | Vue 3 单页应用，按模块分目录，见 [`docs/design/frontend.md`](docs/design/frontend.md) |
+| 网关 | `deploy/gateway` | 8000 | E（运维） | 唯一对外入口，按路径转发，不转发 `/internal` |
 
-公共层 D 的归属：拆成独立的 common 服务，由 M2 组的 D 和 M3 组的 F 分别负责 RBAC 与通知审计；空间与座位主数据归 M1。理由与备选方案见 [ADR-001](docs/adr/001-公共层归属.md)。
+公共层 D 的归属：拆成独立的 common 服务（RBAC、通知、审计）并连同公共库 `libs/campus_common` 由专职负责人 `1517005260` 负责；空间与座位主数据归 M1。理由与备选方案见 [ADR-001](docs/adr/001-公共层归属.md)。负责人中的字母是尚未确认成员的占位，见 [`docs/process.md`](docs/process.md) 第 1 节。
 
 ```mermaid
 flowchart LR

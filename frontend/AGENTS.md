@@ -13,7 +13,7 @@ src/modules/<id>/  业务模块，<id> 与后端服务同名：common / m1-seat 
 src/api/types/   由 npm run gen:types 从 contracts/openapi 生成，不要手改
 ```
 
-在某个模块里工作时只改该模块目录；需要新公共组件或改 core 时说明原因，由 B 评审。
+在某个模块里工作时只改该模块目录；需要新公共组件或改 core 时说明原因，由前端负责人（C，见 `docs/process.md` 第 1 节）评审。
 
 ## 命令
 
