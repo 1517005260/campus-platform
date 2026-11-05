@@ -12,9 +12,9 @@ from typing import Literal
 from campus_common.auth import CurrentUser
 from campus_common.db import constraint_errors
 from campus_common.errors import AppError, not_found
-from campus_common.pagination import Page, PageParams, page_of
+from campus_common.pagination import Page, PageParams, paginate
 from campus_common.timeutil import now
-from sqlalchemy import ColumnElement, delete, func, or_, select
+from sqlalchemy import ColumnElement, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -74,14 +74,12 @@ async def list_rooms(
         conditions.append(Room.status == "enabled")
         conditions.append(or_(Room.dept_id.is_(None), Room.dept_id == user.dept_id))
 
-    statement = select(Room).where(*conditions)
-    total = await session.scalar(select(func.count()).select_from(statement.subquery()))
-    rooms = (
-        await session.scalars(
-            statement.order_by(Room.building, Room.name, Room.id).offset(params.offset).limit(params.size)
-        )
-    ).all()
-    return page_of([s.Room.model_validate(room, from_attributes=True) for room in rooms], total or 0, params)
+    return await paginate(
+        session,
+        select(Room).where(*conditions).order_by(Room.building, Room.name, Room.id),
+        params,
+        lambda room: s.Room.model_validate(room, from_attributes=True),
+    )
 
 
 async def get_room(session: AsyncSession, user: CurrentUser, room_id: int) -> s.RoomDetail:

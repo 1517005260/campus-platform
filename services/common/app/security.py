@@ -10,6 +10,11 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
+async def hash_password_async(password: str) -> str:
+    """在线程池中计算哈希（bcrypt 是 CPU 密集操作，不阻塞事件循环）。"""
+    return await asyncio.to_thread(hash_password, password)
+
+
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 

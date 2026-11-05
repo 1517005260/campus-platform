@@ -3,9 +3,9 @@
 from campus_common.auth import CurrentUser
 from campus_common.db import constraint_errors
 from campus_common.errors import AppError, not_found
-from campus_common.pagination import Page, PageParams, page_of
+from campus_common.pagination import Page, PageParams, paginate
 from campus_common.timeutil import now
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -126,19 +126,14 @@ async def my_reservations(
     conditions = [Reservation.user_id == user.id]
     if status is not None:
         conditions.append(Reservation.status == status)
-    total = await session.scalar(select(func.count()).select_from(Reservation).where(*conditions))
-    rows = (
-        await session.scalars(
-            select(Reservation)
-            .where(*conditions)
-            .options(selectinload(Reservation.seat), selectinload(Reservation.room))
-            .order_by(Reservation.start_at.desc(), Reservation.id.desc())
-            .offset(params.offset)
-            .limit(params.size)
-        )
-    ).all()
-    return page_of(
-        [s.ReservationDetail.model_validate(row, from_attributes=True) for row in rows], total or 0, params
+    return await paginate(
+        session,
+        select(Reservation)
+        .where(*conditions)
+        .options(selectinload(Reservation.seat), selectinload(Reservation.room))
+        .order_by(Reservation.start_at.desc(), Reservation.id.desc()),
+        params,
+        lambda row: s.ReservationDetail.model_validate(row, from_attributes=True),
     )
 
 
@@ -147,20 +142,11 @@ async def my_violations(
     user: CurrentUser,
     params: PageParams,
 ) -> Page[s.ViolationOut]:
-    total = await session.scalar(
-        select(func.count()).select_from(Violation).where(Violation.user_id == user.id)
-    )
-    rows = (
-        await session.scalars(
-            select(Violation)
-            .where(Violation.user_id == user.id)
-            .order_by(Violation.created_at.desc(), Violation.id.desc())
-            .offset(params.offset)
-            .limit(params.size)
-        )
-    ).all()
-    return page_of(
-        [s.ViolationOut.model_validate(row, from_attributes=True) for row in rows],
-        total or 0,
+    return await paginate(
+        session,
+        select(Violation)
+        .where(Violation.user_id == user.id)
+        .order_by(Violation.created_at.desc(), Violation.id.desc()),
         params,
+        lambda row: s.ViolationOut.model_validate(row, from_attributes=True),
     )

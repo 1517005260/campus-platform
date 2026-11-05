@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/core/auth/store";
+import NotificationBell from "@/core/layout/NotificationBell.vue";
 import { modules } from "@/modules";
 
 const auth = useAuthStore();
@@ -33,7 +34,8 @@ const visibleModules = computed(() =>
     <el-container>
       <el-header class="header">
         <span>{{ route.meta.title }}</span>
-        <span>
+        <span class="user">
+          <NotificationBell />
           {{ auth.user?.name }}
           <el-tag v-for="r in auth.user?.roles" :key="r" size="small" style="margin-left: 4px">{{ r }}</el-tag>
           <el-button link type="primary" style="margin-left: 12px" @click="auth.logout()">退出</el-button>
@@ -53,6 +55,10 @@ const visibleModules = computed(() =>
 .brand {
   padding: 16px;
   font-weight: 600;
+}
+.user {
+  display: inline-flex;
+  align-items: center;
 }
 .header {
   display: flex;

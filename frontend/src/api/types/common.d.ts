@@ -7,14 +7,43 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 院系列表 */
+        /**
+         * 院系列表
+         * @description 按 ID 升序。
+         */
         get: operations["list_depts_api_v1_admin_depts_get"];
+        put?: never;
+        /**
+         * 新建院系
+         * @description 错误：409 `DEPT_EXISTS`。
+         */
+        post: operations["create_dept_api_v1_admin_depts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/depts/{dept_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * 院系改名
+         * @description 院系不能删除（其他模块按院系 ID 引用院系），撤销的院系改名标注即可。
+         *
+         *     错误：404 `NOT_FOUND`；409 `DEPT_EXISTS`。
+         */
+        patch: operations["rename_dept_api_v1_admin_depts__dept_id__patch"];
         trace?: never;
     };
     "/api/v1/admin/permissions": {
@@ -24,7 +53,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 权限码目录 */
+        /**
+         * 权限码目录
+         * @description 按模块、权限码排序。权限码由各模块在 common 的 app/permissions.py 登记，部署时由种子写入。
+         */
         get: operations["list_permissions_api_v1_admin_permissions_get"];
         put?: never;
         post?: never;
@@ -41,12 +73,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 角色列表 */
+        /**
+         * 角色列表
+         * @description 预置角色在前。`admin:user` 也可查看，用于给用户分配角色。
+         */
         get: operations["list_roles_api_v1_admin_roles_get"];
         put?: never;
         /**
          * 新建角色
-         * @description perms 中的每个权限码必须存在于权限目录，否则 400 UNKNOWN_PERMISSION。
+         * @description 新建的角色为自定义角色（builtin=false）。
+         *
+         *     错误：400 `UNKNOWN_PERMISSION`（details.unknown 列出不存在的权限码）；409 `ROLE_EXISTS`。
          */
         post: operations["create_role_api_v1_admin_roles_post"];
         delete?: never;
@@ -65,10 +102,20 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * 删除自定义角色
+         * @description 错误：404 `NOT_FOUND`；409 `BUILTIN_ROLE_IMMUTABLE`（预置角色）、
+         *     `ROLE_IN_USE`（仍有用户拥有该角色）。
+         */
+        delete: operations["delete_role_api_v1_admin_roles__code__delete"];
         options?: never;
         head?: never;
-        /** 修改角色 */
+        /**
+         * 修改角色
+         * @description perms 为整体替换。预置角色可以调整权限，不能改名；系统管理员角色必须保留 admin:user 与 admin:role。
+         *
+         *     错误：404 `NOT_FOUND`；400 `UNKNOWN_PERMISSION`；409 `BUILTIN_ROLE_IMMUTABLE`。
+         */
         patch: operations["update_role_api_v1_admin_roles__code__patch"];
         trace?: never;
     };
@@ -79,15 +126,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 用户列表 */
+        /**
+         * 用户列表
+         * @description 按 ID 升序。
+         */
         get: operations["list_users_api_v1_admin_users_get"];
         put?: never;
-        /** 新建用户 */
+        /**
+         * 新建用户
+         * @description 错误：409 `USERNAME_EXISTS`；400 `DEPT_NOT_FOUND`、`UNKNOWN_ROLE`；
+         *     403 `PERMISSION_ESCALATION`（分配的角色含自己没有的权限码）。
+         */
         post: operations["create_user_api_v1_admin_users_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 修改用户（资料、院系、停用/启用、重置密码）
+         * @description 停用的用户不能登录，也不再出现在按权限查用户的结果中；已签发的 token 到期前仍然有效。
+         *
+         *     错误：404 `NOT_FOUND`；400 `DEPT_NOT_FOUND`；409 `SELF_LOCKOUT`（停用自己）；
+         *     403 `PERMISSION_ESCALATION`（该用户的角色含自己没有的权限码）。
+         */
+        patch: operations["update_user_api_v1_admin_users__user_id__patch"];
         trace?: never;
     };
     "/api/v1/admin/users/{user_id}/roles": {
@@ -100,7 +177,10 @@ export interface paths {
         get?: never;
         /**
          * 设置用户角色
-         * @description 角色变化在用户下次登录（或 token 过期）后生效。
+         * @description 整体替换用户的角色，并给该用户发一条站内通知。角色变化在用户下次登录后生效。
+         *
+         *     错误：404 `NOT_FOUND`；400 `UNKNOWN_ROLE`；409 `SELF_LOCKOUT`（移除自己的 admin:user）；
+         *     403 `PERMISSION_ESCALATION`（原有或新分配的角色含自己没有的权限码）。
          */
         put: operations["set_user_roles_api_v1_admin_users__user_id__roles_put"];
         post?: never;
@@ -117,7 +197,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询操作审计 */
+        /**
+         * 查询操作审计
+         * @description 各条件精确匹配，最新的在前。时间不带时区：422 `VALIDATION_ERROR`。
+         */
         get: operations["query_audit_api_v1_audit_get"];
         put?: never;
         post?: never;
@@ -168,7 +251,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 我的站内通知 */
+        /**
+         * 我的站内通知
+         * @description 只返回当前用户的通知，最新的在前。
+         */
         get: operations["my_notifications_api_v1_notifications_get"];
         put?: never;
         post?: never;
@@ -187,8 +273,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 标为已读 */
+        /**
+         * 标为已读
+         * @description 重复标记不报错，保留第一次的已读时间。错误：404 `NOT_FOUND`（不存在或不是自己的通知）。
+         */
         post: operations["mark_read_api_v1_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 全部标为已读 */
+        post: operations["mark_all_read_api_v1_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 我的未读通知数 */
+        get: operations["my_unread_count_api_v1_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -334,6 +457,11 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** DeptIn */
+        DeptIn: {
+            /** Name */
+            name: string;
+        };
         /** DeptOut */
         DeptOut: {
             /** Id */
@@ -459,6 +587,12 @@ export interface components {
             name: string;
             /** Perms */
             perms: string[];
+            /**
+             * User Count
+             * @description 拥有该角色的用户数（含停用用户）
+             * @default 0
+             */
+            user_count: number;
         };
         /** RoleUpdate */
         RoleUpdate: {
@@ -467,10 +601,20 @@ export interface components {
             /** Perms */
             perms?: string[] | null;
         };
+        /** UnreadCount */
+        UnreadCount: {
+            /** Count */
+            count: number;
+        };
         /** UserAdmin */
         UserAdmin: {
             /** Active */
             active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
             /** Dept Id */
             dept_id: number | null;
             /** Email */
@@ -516,20 +660,46 @@ export interface components {
             email?: string | null;
             /** Name */
             name: string;
-            /** Password */
+            /**
+             * Password
+             * @description bcrypt 只取前 72 字节
+             */
             password: string;
             /**
              * Role Codes
              * @default []
              */
             role_codes: string[];
-            /** Username */
+            /**
+             * Username
+             * @description 字母、数字、_ . -，2–50 位
+             */
             username: string;
         };
         /** UserRolesUpdate */
         UserRolesUpdate: {
             /** Role Codes */
             role_codes: string[];
+        };
+        /**
+         * UserUpdate
+         * @description 只修改传入的字段；dept_id、email 传 null 表示清空（name 为 null 视为不修改）。
+         *     active=false 停用（不能登录），true 恢复。
+         */
+        UserUpdate: {
+            /** Active */
+            active?: boolean | null;
+            /** Dept Id */
+            dept_id?: number | null;
+            /** Email */
+            email?: string | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * Password
+             * @description 重置密码
+             */
+            password?: string | null;
         };
         /** VersionInfo */
         VersionInfo: {
@@ -567,6 +737,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeptOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_dept_api_v1_admin_depts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeptOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    rename_dept_api_v1_admin_depts__dept_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dept_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeptOut"];
                 };
             };
             /** @description Bad Request */
@@ -887,6 +1233,89 @@ export interface operations {
             };
         };
     };
+    delete_role_api_v1_admin_roles__code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     update_role_api_v1_admin_roles__code__patch: {
         parameters: {
             query?: never;
@@ -979,10 +1408,14 @@ export interface operations {
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: {
+                /** @description true 只看启用的，false 只看停用的 */
+                active?: boolean | null;
                 dept_id?: number | null;
+                /** @description 用户名或姓名包含该文本（不区分大小写） */
                 keyword?: string | null;
                 /** @description 页码，从 1 开始 */
                 page?: number;
+                /** @description 角色编码 */
                 role?: string | null;
                 /** @description 每页条数 */
                 size?: number;
@@ -1154,6 +1587,95 @@ export interface operations {
             };
         };
     };
+    update_user_api_v1_admin_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdmin"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     set_user_roles_api_v1_admin_users__user_id__roles_put: {
         parameters: {
             query?: never;
@@ -1246,9 +1768,15 @@ export interface operations {
     query_audit_api_v1_audit_get: {
         parameters: {
             query?: {
+                /** @description 动作编码，例如 block.create */
+                action?: string | null;
+                /** @description 用户 ID、服务名或定时任务名 */
                 actor_id?: string | null;
+                /** @description 起始时刻（含），需带时区 */
                 date_from?: string | null;
+                /** @description 结束时刻（不含），需带时区 */
                 date_to?: string | null;
+                /** @description common / m1 / m2 / m3 */
                 module?: string | null;
                 /** @description 页码，从 1 开始 */
                 page?: number;
@@ -1514,6 +2042,7 @@ export interface operations {
                 page?: number;
                 /** @description 每页条数 */
                 size?: number;
+                /** @description true 只看未读，false 只看已读 */
                 unread?: boolean | null;
             };
             header?: never;
@@ -1613,6 +2142,170 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mark_all_read_api_v1_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    my_unread_count_api_v1_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
+                };
             };
             /** @description Bad Request */
             400: {

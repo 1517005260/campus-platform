@@ -4,9 +4,9 @@ from datetime import date
 
 from campus_common.auth import CurrentUser
 from campus_common.errors import not_found
-from campus_common.pagination import Page, PageParams, page_of
+from campus_common.pagination import Page, PageParams, paginate
 from campus_common.timeutil import at_hour, now
-from sqlalchemy import DateTime, Integer, column, func, select, true, values
+from sqlalchemy import DateTime, Integer, column, select, true, values
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas as s
@@ -42,23 +42,18 @@ async def search_seats(
     if outlet is not None:
         conditions.append(Seat.outlet == outlet)
 
-    base = select(Seat, Room).join(Room, Room.id == Seat.room_id).where(*conditions)
-    total = await session.scalar(select(func.count()).select_from(base.subquery()))
-    rows = (
-        await session.execute(
-            base.order_by(Room.building, Room.name, Seat.code, Seat.id)
-            .offset(params.offset)
-            .limit(params.size)
-        )
-    ).all()
-    items = [
-        s.SeatSearchItem(
-            seat=s.Seat.model_validate(seat, from_attributes=True),
-            room=s.Room.model_validate(room, from_attributes=True),
-        )
-        for seat, room in rows
-    ]
-    return page_of(items, total or 0, params)
+    return await paginate(
+        session,
+        select(Seat, Room)
+        .join(Room, Room.id == Seat.room_id)
+        .where(*conditions)
+        .order_by(Room.building, Room.name, Seat.code, Seat.id),
+        params,
+        lambda row: s.SeatSearchItem(
+            seat=s.Seat.model_validate(row.Seat, from_attributes=True),
+            room=s.Room.model_validate(row.Room, from_attributes=True),
+        ),
+    )
 
 
 def _hour_state(

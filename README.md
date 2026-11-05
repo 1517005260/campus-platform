@@ -67,7 +67,7 @@ flowchart LR
 | 服务间调用 | 调用方只写业务语义，通信、桩数据（`STUB_CLIENTS`）、宽容读取由公共客户端完成；契约测试对照 `contracts/openapi` 校验 | `clients.m1.M1Client`、`clients.common.CommonClient` |
 | 定时任务 | 扫描函数 `fn(session, at)`，注册即调度，任务名 `<模块>.<函数名>` | `worker.ServiceWorker` |
 | 系统参数 | 有可调参数的服务（M1、M2、M3）各一张键值表，结构与默认值由参数模型定义 | `ParamMixin`、`params.*` |
-| 种子数据 | `seed_base`（所有环境）+ `seed_demo`（`SEED_DEMO=true`），幂等 | `seeding.run_seed()` |
+| 种子数据 | `seed_base`（所有环境）+ `seed_demo`（`SEED_DEMO=true`，默认开启），幂等 | `seeding.run_seed()` |
 | 测试 | 通用 fixture `client` / `migrated` / `db` / `db_seed`；只连接 `*_test` 库 | pytest 插件、`testing.*` |
 | 运维 | 每个服务提供 `GET /health`（存活）、`GET /ready`（数据库可用）、`GET /version`；网关映射为 `/ops/<服务>/<health\|ready\|version>` | `create_app()` |
 
@@ -158,7 +158,7 @@ common 消费者 → inbox 表按 message_id 去重（与业务写入同一事�
 - 每个服务一个 schema，Alembic 版本表也在各自 schema 里（`m1.alembic_version`），四个服务独立演进。
 - 迁移编号顺序递增（`0001`、`0002`…），用 `make migration svc=m1-seat rev=0002 msg="..."` 生成后人工审查。
 - 迁移遵循"先扩展后收缩"：新增列先可空或带默认值，删除旧列放到下一个版本。这样回滚到上一版镜像时，旧代码仍能在新 schema 上运行。
-- 种子数据在 `app/seed.py`，每次部署自动执行，必须幂等。基础数据（权限码、预置角色、系统参数）所有环境都写；演示数据（测试账号、演示教室）只在 `SEED_DEMO=true` 的环境写。
+- 种子数据在 `app/seed.py`，每次部署自动执行，必须幂等。基础数据（权限码、预置角色、系统参数）所有环境都写；演示数据（演示账号、院系、演示教室等）在 `SEED_DEMO=true` 时写，默认所有环境（含生产）都导入，存放真实数据前设为 `false` 关闭。
 - CI 对每个服务验证：空库一次重放到最新、模型与迁移一致（`alembic check`）、可回退再重放、种子连续执行两次结果不变。
 
 ## 7. 环境与部署
@@ -190,7 +190,7 @@ common 消费者 → inbox 表按 message_id 去重（与业务写入同一事�
 | 邮件 | 测试环境启用 `mailcatcher` profile，邮件进入 Mailpit（界面只绑定服务器本机，经 SSH 隧道查看）；生产环境填写 `SMTP_*` 接入真实 SMTP，`SMTP_HOST` 为空表示只发站内信 |
 | 回滚 | 迁移遵循"先扩展后收缩"；api 启动时若数据库版本比镜像新则跳过迁移并告警（`campus_common.migrate`），旧镜像直接在新 schema 上运行 |
 | 备份 | 每次部署前与每日 03:00（`server_init.sh` 安装的 cron）执行 `deploy/backup.sh`，`pg_dump` 写入部署目录的 `backups/`，保留最近 14 份；恢复命令见脚本注释 |
-| 初始账号 | 所有环境写入引导管理员 `admin`（密码 `ADMIN_PASSWORD`，默认 `campus123`），用于新环境登录后创建其他用户；开发与测试环境另有各角色的演示账号（`SEED_DEMO=true`，密码 `DEMO_PASSWORD`，默认 `campus123`），集成测试读取同一个值 |
+| 初始账号 | 所有环境写入引导管理员 `admin`（密码 `ADMIN_PASSWORD`，默认 `campus123`），用于新环境登录后创建其他用户；默认所有环境另有各角色的演示账号（`SEED_DEMO=true`，密码 `DEMO_PASSWORD`，默认 `campus123`；生产环境应在 secrets 中改掉），集成测试读取同一个值；演示账号的邮箱都是不可投递的 `@campus.local` |
 
 单服务器方案：测试环境使用 `deploy/env/test-single-server.env`（端口 +10000），compose 项目名不同（`campus-test` / `campus-prod`），数据卷互相隔离。
 
@@ -240,7 +240,7 @@ make fe                    # 前端开发服务器 http://localhost:3000
 前端只依赖网关 8000。做前端时至少启动 common（登录）和自己模块的后端服务；其他服务的页面不打开就不需要启动。
 
 - 接口文档：`http://localhost:8001/docs`（M1），8002–8004 同理
-- 演示账号（密码 `campus123`）：`student`、`teacher`、`room_admin`、`ops_admin`、`dept_approver`、`school_approver`、`dispatcher`、`worker`、`screen`；系统管理员 `admin`（密码 `campus123`，所有环境都有）
+- 演示账号（密码 `campus123`）：`student`（计算与智能创新学院）、`student2`（数学科学学院）、`teacher`、`room_admin`、`ops_admin`、`dept_approver`、`school_approver`、`dispatcher`、`worker`、`screen`；自定义角色 `auditor`（审计员）、`user_manager`（账号管理员）；另有各院系的学生（学号形式的用户名）、教师、审批人和维修工共约 40 个账号，完整列表见 `services/common/app/seed.py`；系统管理员 `admin`（密码 `campus123`，所有环境都有）
 - 收到的邮件（Mailpit）：`http://localhost:8025`；RabbitMQ 管理界面：`http://localhost:15672`（campus / campus）
 - 默认 `STUB_CLIENTS=true`：服务间调用返回桩数据，不需要启动被调用方。联调时设为 `false`
 

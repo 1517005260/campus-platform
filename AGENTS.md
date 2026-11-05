@@ -49,7 +49,7 @@ make migration svc=m1-seat rev=0002 msg="add seat tags"
 | 数据库模型与会话 | `db.make_metadata(settings.db_schema)`、`db.SessionDep`（会话时区为业务时区）；`db.constraint_errors()` 把违反约束转成错误码；`infra_models` 的 `TimestampMixin`、`OutboxMixin`、`InboxMixin`、`IdempotencyKeyMixin`、`ParamMixin` | 本服务的业务表 |
 | 迁移 | `migrations.run_migrations()`（`migrations/env.py`）；启动时 `python -m campus_common.migrate` | 迁移脚本 |
 | 鉴权 | `auth.require_perm()`、`require_service()`、`CurrentUserDep` | 权限码 |
-| 错误、分页、时间 | `errors.AppError`、`errors.not_found()`、`query.query_model()`（模型作为查询参数）、`pagination.Page` / `page_params` / `page_of()`、`timeutil.now()/at_hour()/to_biz()`、`timeutil.TimeRangeModel`（end_at 晚于 start_at 的校验基类） | 错误码 |
+| 错误、分页、时间 | `errors.AppError`、`errors.not_found()`、`query.query_model()`（模型作为查询参数）、`pagination.Page` / `page_params` / `page_of()` / `paginate()`、`timeutil.now()/at_hour()/to_biz()`、`timeutil.TimeRangeModel`（end_at 晚于 start_at 的校验基类） | 错误码 |
 | 定时任务 | `worker.ServiceWorker`：`worker.scan(jobs.xxx, every=60)` | `app/jobs.py` 中的 `fn(session, at)` |
 | 种子数据 | `seeding.run_seed()`、`reset_sequences()` | `app/seed.py` 中的 `seed_base` / `seed_demo` |
 | 可调系统参数 | `infra_models.ParamMixin` + `params.load_params()` / `aload_params()` / `asave_params()` / `seed_params()` | 参数模型（字段与默认值） |
