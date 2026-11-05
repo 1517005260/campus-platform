@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from campus_common.service_client import ServiceClient
 from campus_common.settings import ServiceSettings
+from campus_common.timeutil import to_biz
 
 BlockSource = Literal["M2_OCCUPY", "M3_MAINTENANCE"]
 
@@ -70,7 +71,10 @@ class M1Client:
         reason: str,
         idempotency_key: str,
     ) -> M1BlockResult:
-        """在 [start_at, end_at) 内占用或下架整间教室；end_at 为空表示结束时间未知。重试安全。"""
+        """在 [start_at, end_at) 内占用或下架整间教室；end_at 为空表示结束时间未知。重试安全。
+
+        M1 按请求内容核对幂等键，时间统一换到业务时区再序列化：同一时刻无论调用方用哪个时区表示，
+        发出的请求都相同。"""
         if self.stub_enabled:
             return M1BlockResult(block_id=ref_id, cancelled_reservations=[])
         data = await self._http.request(
@@ -78,8 +82,8 @@ class M1Client:
             "/internal/v1/blocks",
             json={
                 "room_id": room_id,
-                "start_at": start_at.isoformat(),
-                "end_at": end_at.isoformat() if end_at else None,
+                "start_at": to_biz(start_at).isoformat(),
+                "end_at": to_biz(end_at).isoformat() if end_at else None,
                 "source": source,
                 "ref_id": ref_id,
                 "reason": reason,

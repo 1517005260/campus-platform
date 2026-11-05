@@ -100,7 +100,7 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 
 | 队列 | 绑定 | 处理 |
 |---|---|---|
-| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个 user_id 写一条 `notifications` |
+| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个收件人写一条 `notifications`。收件人 = `user_ids` ∪ 拥有 `perm` 的全部启用用户（`perm` 可选，在处理消息时用与 `GET /internal/v1/users?perm=` 相同的查询 `rbac.perm_holders` 解析，同一人只写一条）；发送方因此不必为查收件人同步调用 common |
 | `common.audit.record` | `campus.events` / `audit.record` | 写 `audit_logs`，保留 request_id 与 message_id |
 
 两者都先 `claim_message` 登记 inbox，与业务写入同一事务。队列由公共库 `campus_common.topology` 定义，消费者用 `campus_common.consuming.subscribe()` 注册，失败按错误分类处理（[ADR-010](../adr/010-消息拓扑与失败重试.md)）：
@@ -126,7 +126,15 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 | `seat.reservation_cancelled_by_admin` | 按 cause 区分：`seat_disabled` 预约因座位停用被取消；`room_disabled` 预约因自习室停用被取消；`room_deregistered` 预约因自习室注销被取消 | start_at、end_at、cause |
 | `common.roles_changed` | 你的角色已变更 | roles（common 自己写入，只发站内信） |
 | `common.welcome` | 欢迎使用校园资源服务平台 | name（演示数据） |
-| `room.*`、`repair.*` | 由 M2、M3 提出后登记 | |
+| `repair.reported` | 新的报修待派单 | order_id、category、room |
+| `repair.cancelled` | 报修工单已取消 | order_id、category、reason |
+| `repair.dispatched` | 你有新的维修任务 | order_id、category、deadline_at、blocks_room（为真时说明开始维修会下架教室） |
+| `repair.started` | 报修工单开始维修 | order_id、category、blocks_room（为真时说明教室暂停预约） |
+| `repair.completed` | 报修工单待验收 | order_id、category、note、accept_after_hours |
+| `repair.rejected` | 维修验收未通过 | order_id、category、reason、blocks_room |
+| `repair.accepted` | 维修工单已验收 | order_id、category、rating、by_admin（区分报修人验收与管理员代验收） |
+| `repair.escalated` | 报修工单超时升级 | order_id、category、status、since、timeout_hours、level |
+| `room.*` | 由 M2 提出后登记 | |
 
 未知模板或缺少参数时仍然落库（标题用模板编码，正文为参数的 JSON），并记录警告，避免因模板缺失丢消息。
 

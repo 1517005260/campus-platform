@@ -1,13 +1,19 @@
-"""测试辅助：生成带指定权限的 token 和服务间请求头、清空服务 schema。
+"""测试辅助：生成带指定权限的 token 和服务间请求头、清空服务 schema、冻结时钟的默认时刻 NOW。
 
 通用 fixture（client、migrated、db、db_seed）由 pytest 插件提供，见 pytest_plugin.py。
 """
+
+from datetime import date
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from campus_common.auth import CurrentUser, create_token
 from campus_common.settings import ServiceSettings
+from campus_common.timeutil import at_hour
+
+# clock fixture 冻结的默认时刻：北京时间 06:00，此时 UTC 日期还是前一天，时区换算错误会直接暴露
+NOW = at_hour(date(2026, 10, 20), 6)
 
 
 def user_headers(

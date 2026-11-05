@@ -38,6 +38,11 @@ class Ref(BaseModel):
 class NotificationSend(BaseModel):
     TYPE: ClassVar[str] = "notification.send"
     user_ids: list[int]
+    perm: str | None = Field(
+        None,
+        description="另外通知拥有该权限码的全部启用用户（common 处理消息时解析），"
+        "例如超时升级通知 repair:manage；发送方因此不必为查收件人调用 common",
+    )
     template: str = Field(description="通知模板编码，例如 seat.remind_before")
     params: dict[str, Any] = Field(default_factory=dict, description="模板参数")
     channels: list[Literal["inapp", "email"]] = ["inapp", "email"]

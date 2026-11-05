@@ -35,6 +35,11 @@ class WorkOrder(TimestampMixin, Base):
     rating: Mapped[int | None] = mapped_column(Integer)
     rating_comment: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 超时升级的计时起点：进入当前状态的时间与上次升级时间中较晚的一个（见 jobs.escalate_overdue）
+    status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 经 M1 下架时的 start_at，首次尝试前写入并提交；重试沿用同一值，请求内容与幂等键一起保持不变
+    block_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_by: Mapped[int | None] = mapped_column(Integer)  # 报修人或代验收的管理员
     version: Mapped[int] = mapped_column(Integer, default=1)
 
@@ -54,6 +59,19 @@ class WorkOrderEvent(Base):
     from_status: Mapped[str | None] = mapped_column(String(20))
     to_status: Mapped[str | None] = mapped_column(String(20))
     note: Mapped[str | None] = mapped_column(Text)
+
+
+class UserSnapshot(Base):
+    """工单上出现过的人（报修人、操作人、维修工）的显示信息，在其参与工单时写入或刷新。
+
+    读接口据此显示姓名，不再逐个调用 common；改名后在此人下次操作工单时更新。"""
+
+    __tablename__ = "user_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    username: Mapped[str] = mapped_column(String(50))
+    name: Mapped[str] = mapped_column(String(50))
+    dept_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class Setting(ParamMixin, Base):

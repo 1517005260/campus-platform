@@ -258,6 +258,19 @@
         "title": "Params",
         "type": "object"
       },
+      "perm": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "另外通知拥有该权限码的全部启用用户（common 处理消息时解析），例如超时升级通知 repair:manage；发送方因此不必为查收件人调用 common",
+        "title": "Perm"
+      },
       "ref": {
         "anyOf": [
           {

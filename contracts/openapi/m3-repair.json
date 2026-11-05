@@ -581,7 +581,7 @@
   "paths": {
     "/api/v1/repair/orders": {
       "get": {
-        "description": "只有 repair:work 的用户只能看到派给自己的工单。",
+        "description": "新的在前。只有 repair:work 的用户只能看到派给自己的工单。",
         "operationId": "list_orders_api_v1_repair_orders_get",
         "parameters": [
           {
@@ -777,7 +777,7 @@
         ]
       },
       "post": {
-        "description": "校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。",
+        "description": "校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。\n\n错误：400 `ROOM_NOT_FOUND`（M1 中没有该教室）、400 `UNKNOWN_CATEGORY`、\n502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 不可达或拒绝调用）。",
         "operationId": "report_api_v1_repair_orders_post",
         "requestBody": {
           "content": {
@@ -884,6 +884,7 @@
     },
     "/api/v1/repair/orders/mine": {
       "get": {
+        "description": "本人上报的工单，新的在前。",
         "operationId": "mine_api_v1_repair_orders_mine_get",
         "parameters": [
           {
@@ -1033,6 +1034,7 @@
     },
     "/api/v1/repair/orders/{order_id}": {
       "get": {
+        "description": "报修人本人、被指派的维修工、调度与管理可见；其他人 404 `NOT_FOUND`（不暴露工单是否存在）。",
         "operationId": "detail_api_v1_repair_orders__order_id__get",
         "parameters": [
           {
@@ -1140,7 +1142,7 @@
     },
     "/api/v1/repair/orders/{order_id}/accept": {
       "post": {
-        "description": "pending_acceptance → closed。报修人本人验收；超过 admin_accept_after_hours 后\nrepair:manage 可代验收。若曾下架教室，调用 M1 释放，成功后才关闭工单。",
+        "description": "pending_acceptance → closed，通知维修工。报修人本人验收；完工 admin_accept_after_hours 后（含该时刻）\nrepair:manage 可代验收（closed_by 记录实际操作人）。若曾下架教室，先调用 M1 释放，成功后才关闭工单。\n\n错误：404 `NOT_FOUND`（看不到该工单）、409 `ORDER_STATE_CONFLICT`（不在待验收）、\n403 `ADMIN_ACCEPT_TOO_EARLY`（管理员代验收时间未到）、\n403 `FORBIDDEN`（看得到但既不是报修人也不能代验收）、\n502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 释放失败，工单保持待验收）。",
         "operationId": "accept_api_v1_repair_orders__order_id__accept_post",
         "parameters": [
           {
@@ -1258,7 +1260,7 @@
     },
     "/api/v1/repair/orders/{order_id}/cancel": {
       "post": {
-        "description": "只有 submitted 状态可取消，否则 409 ORDER_STATE_CONFLICT。",
+        "description": "submitted → cancelled，通知调度员不必再派单。\n\n错误：404 `NOT_FOUND`（看不到该工单）、403 `FORBIDDEN`（看得到但不是报修人）、\n409 `ORDER_STATE_CONFLICT`（已派单或已结束）。",
         "operationId": "cancel_api_v1_repair_orders__order_id__cancel_post",
         "parameters": [
           {
@@ -1376,7 +1378,7 @@
     },
     "/api/v1/repair/orders/{order_id}/complete": {
       "post": {
-        "description": "in_progress → pending_acceptance。教室在验收通过前保持下架。通知报修人验收。",
+        "description": "in_progress → pending_acceptance。教室在验收通过前保持下架。通知报修人验收。\n\n错误：404 `NOT_FOUND`（看不到该工单）、403 `NOT_ASSIGNEE`、\n409 `ORDER_STATE_CONFLICT`（不在 in_progress）。",
         "operationId": "complete_api_v1_repair_orders__order_id__complete_post",
         "parameters": [
           {
@@ -1494,7 +1496,7 @@
     },
     "/api/v1/repair/orders/{order_id}/dispatch": {
       "post": {
-        "description": "submitted → dispatched。assignee 必须拥有 repair:work。通知维修工。",
+        "description": "submitted → dispatched，通知维修工。assignee 必须拥有 repair:work（调用 common 校验）。\n\n错误：400 `DEADLINE_NOT_FUTURE`（截止时间不晚于现在）、400 `ASSIGNEE_NOT_WORKER`、\n404 `NOT_FOUND`、409 `ORDER_STATE_CONFLICT`（不在 submitted）、\n502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（common 不可达或拒绝调用）。",
         "operationId": "dispatch_api_v1_repair_orders__order_id__dispatch_post",
         "parameters": [
           {
@@ -1612,7 +1614,7 @@
     },
     "/api/v1/repair/orders/{order_id}/reject-acceptance": {
       "post": {
-        "description": "pending_acceptance → in_progress，教室保持下架。",
+        "description": "pending_acceptance → in_progress，教室保持下架，通知维修工。\n\n错误：404 `NOT_FOUND`（看不到该工单）、403 `FORBIDDEN`（看得到但不是报修人）、\n409 `ORDER_STATE_CONFLICT`（不在待验收）。",
         "operationId": "reject_acceptance_api_v1_repair_orders__order_id__reject_acceptance_post",
         "parameters": [
           {
@@ -1730,7 +1732,7 @@
     },
     "/api/v1/repair/orders/{order_id}/start": {
       "post": {
-        "description": "dispatched → in_progress。blocks_room=true 时先调用 M1 下架教室，\n成功后才改状态；M1 失败则本地不变并返回 502。",
+        "description": "dispatched → in_progress，通知报修人。blocks_room=true 时先调用 M1 下架教室，成功后才改状态；\n下架起点在首次尝试时固定，重试发出相同的请求（幂等键 m3-order-{id}-block）。\n\n错误：404 `NOT_FOUND`（看不到该工单）、403 `NOT_ASSIGNEE`（看得到但不是被指派人）、\n409 `ORDER_STATE_CONFLICT`（不在 dispatched）、\n502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 失败，工单保持 dispatched）；M1 的业务错误原样返回。",
         "operationId": "start_api_v1_repair_orders__order_id__start_post",
         "parameters": [
           {
