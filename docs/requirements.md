@@ -11,21 +11,25 @@
 
 | 编号 | 需求 | 验收标准 | 实现 | 验证 | 状态 |
 |---|---|---|---|---|---|
-| REQ-M1-01 | 自习室管理 | 拥有 `seat:room_manage` 的用户可登记、修改、停用自习室，设置楼宇、类型、容量、每周开放时间、所属院系；院系自习室只对本院系用户可见、可约 | `api/rooms.py`、`room_service.py` | `test_rooms.py` | 已实现 |
-| REQ-M1-02 | 座位管理 | 可登记、停用座位；座位在教室内编号唯一；停用的座位不出现在搜索结果中 | `api/rooms.py`、`room_service.py` | `test_rooms.py` | 已实现 |
-| REQ-M1-03 | 按整点预约 | 起止均为整点；时长 1 至 `max_hours`（默认 4）小时；必须在开放时间内；违反时返回 400 及对应错误码 | `api/reservations.py`、`reservation_service.py` | `test_reservations.py`、`test_stats.py` | 已实现 |
-| REQ-M1-04 | 预约冲突 | 同一座位时段重叠的有效预约只能存在一个；同一用户同一时段只能有一个有效预约；并发请求也只有一个成功 | `models.py`、`reservation_service.py` | `test_db_constraints.py`、`test_reservations.py` | 已实现 |
-| REQ-M1-05 | 取消预约 | 开始前可取消，取消后座位立即可被他人预约，不记违约 | `api/reservations.py`、`reservation_service.py` | `test_reservations.py` | 已实现 |
-| REQ-M1-06 | 签到 | 每间教室每天一个签到码（屏幕显示码与二维码）；在开始前 15 分钟至开始后 `auto_cancel_min` 分钟内输入正确的码签到成功；码错误返回 400 `CHECKIN_CODE_INVALID` | `api/rooms.py`、`api/reservations.py`、`checkin_service.py` | `test_checkin.py` | 已实现 |
-| REQ-M1-07 | 开始前提醒 | 开始前 `remind_before_min`（默认 15）分钟发送站内通知和邮件，每个预约只发一次 | `jobs.send_reminders_before` | `test_jobs.py` | 已实现 |
-| REQ-M1-08 | 未签到再提醒 | 开始后 `remind_late_min`（默认 10）分钟仍未签到，再提醒一次 | `jobs.send_reminders_late` | `test_jobs.py` | 已实现 |
-| REQ-M1-09 | 未签到自动取消并记违约 | 开始后 `auto_cancel_min`（默认 15）分钟仍未签到：状态变为 no_show、释放座位、通知学生、记 1 次违约；重复执行不重复记违约；已签到的不受影响 | `jobs.mark_no_shows` | `test_jobs.py` | 已实现 |
-| REQ-M1-10 | 搜索座位 | 可按日期时段、楼宇、教室、插座条件搜索；只返回该时段真正可约的座位（未被预约、未被 M2/M3 占用、座位与教室启用、在开放时间内） | `api/rooms.py`、`availability.py` | `test_availability.py` | 已实现 |
-| REQ-M1-11 | 历史与再次预约 | 可查看自己的历史预约；可选择一条历史记录，为同一座位预约新的时段（遵守 REQ-M1-03/04） | `api/reservations.py`、`reservation_service.py` | `test_reservations.py` | 已实现 |
-| REQ-M1-12 | 运营统计 | 拥有 `seat:stats` 的用户可按日期范围、教室查看利用率（已签到小时数 / 开放小时数）、违约率、各小时分布 | `api/admin.py`、`stats_service.py` | `test_stats.py` | 已实现 |
-| REQ-M1-13 | 插座标记 | 座位可标记为无插座、靠近固定插座、靠近移动导轨插座；搜索可按此筛选；座位详情显示标记 | `models.Seat.outlet`、`room_service.py`、`availability.py` | `test_rooms.py`、`test_availability.py` | 已实现 |
-| REQ-M1-14 | 系统参数 | 拥有 `seat:config` 的用户可修改 `max_hours`、提醒与自动取消的分钟数，修改后对新预约和下一轮扫描生效 | `api/admin.py`、`rules.py` | `test_stats.py`、`test_jobs.py` | 已实现 |
-| REQ-M1-15 | 违约记录 | 学生可查看自己的违约记录 | `api/reservations.py`、`reservation_service.py` | `test_reservations.py` | 已实现 |
+| REQ-M1-01 | 自习室管理 | 拥有 `seat:room_manage` 的用户可登记、修改、停用自习室，设置楼宇、类型、容量、每周开放时间、所属院系；院系自习室只对本院系用户可见、可约；停用自习室或注销自习室（`is_study_room` 由 true 改为 false）后其全部座位不可预约，尚未结束的有效预约自动取消（`ADMIN_DISABLED`）、通知学生、不记违约；重新启用或重新登记不恢复已取消的预约 | `api/rooms.py`、`room_service.py`、`shared.py` | DB：`test_rooms.py`（`test_list_rooms_filters_department_and_disabled_for_students`、`test_update_room_replaces_hours_and_logs_status`、`test_disabling_room_cancels_reservations_of_all_its_seats`、`test_deregistering_study_room_cancels_like_disabling`）；`test_reservations.py::test_create_reservation_rejects_other_department` | 已实现 |
+| REQ-M1-02 | 座位管理 | 可登记、停用座位；座位在教室内编号唯一；停用的座位不出现在搜索结果中；停用时该座位尚未结束的有效预约自动取消、通知学生、不记违约，之后不能签到 | `api/rooms.py`、`room_service.py`、`shared.py` | DB：`test_rooms.py`（`test_create_seat_rejects_duplicate_code`、`test_disabling_seat_cancels_unfinished_reservations_without_violation`）；`test_availability.py::test_search_excludes_disabled_seat`；`test_checkin.py::test_checkin_rejected_after_seat_disabled` | 已实现 |
+| REQ-M1-03 | 按整点预约 | 起止均为整点；时长 1 至 `max_hours`（默认 4）小时，正好 `max_hours` 允许；必须在开放时间内（可以从开放时刻开始、到关闭时刻结束）；开始时刻已到不能预约；违反时返回 400 及对应错误码，结束不晚于开始返回 422；返回的时间带 `+08:00` | `api/reservations.py`、`reservation_service.py`、`shared.py` | DB：`test_reservations.py`（`test_create_reservation_accepts_exactly_max_hours`、`test_create_reservation_accepts_open_and_close_hour_edges`、`test_create_reservation_rejects_slot_starting_now`、`test_reservation_times_use_business_timezone`）；`test_api_contract.py::test_reservation_rejects_reversed_hours`；`test_stats.py::test_settings_update_affects_new_reservation` | 已实现 |
+| REQ-M1-04 | 预约冲突 | 同一座位时段重叠的有效预约只能存在一个；同一用户同一时段只能有一个有效预约；并发请求也只有一个成功 | `models.py`、`reservation_service.py` | DB：`test_db_constraints.py`；`test_reservations.py`（`test_concurrent_reservations_only_one_succeeds`、`test_create_reservation_rejects_seat_overlap`、`test_create_reservation_rejects_user_overlap`、`test_create_reservation_allows_adjacent_slot`） | 已实现 |
+| REQ-M1-05 | 取消预约 | 开始前可取消，取消后座位立即可被他人预约，不记违约 | `api/reservations.py`、`reservation_service.py` | DB：`test_reservations.py`（`test_cancel_reservation_records_release_and_event`、`test_cannot_cancel_started_reservation`） | 已实现 |
+| REQ-M1-06 | 签到 | 每间教室每天（业务日期）一个签到码（屏幕显示码与二维码）；在开始前 15 分钟（含）至开始后 `auto_cancel_min` 分钟（不含）内输入屏幕当时显示的码签到成功，与 UTC 日期无关；码错误返回 400 `CHECKIN_CODE_INVALID` | `api/rooms.py`、`api/reservations.py`、`checkin_service.py` | DB：`test_checkin.py`（`test_checkin_succeeds_at_window_opening`、`test_checkin_rejects_just_before_window_opens`、`test_checkin_succeeds_just_before_deadline`、`test_checkin_rejects_exact_deadline`、`test_early_morning_reservation_checks_in_with_code_on_screen`、`test_midnight_reservation_checks_in_with_code_shown_before_midnight`、`test_checkin_rejects_wrong_code`） | 已实现 |
+| REQ-M1-07 | 开始前提醒 | 开始前 `remind_before_min`（默认 15）分钟发送站内通知和邮件，每个预约只发一次 | `jobs.send_reminders_before` | DB：`test_jobs.py`（`test_before_reminder_*`） | 已实现 |
+| REQ-M1-08 | 未签到再提醒 | 开始后 `remind_late_min`（默认 10）分钟仍未签到，再提醒一次 | `jobs.send_reminders_late` | DB：`test_jobs.py`（`test_late_reminder_*`） | 已实现 |
+| REQ-M1-09 | 未签到自动取消并记违约 | 开始后 `auto_cancel_min`（默认 15）分钟仍未签到：状态变为 no_show、释放座位、通知学生、记 1 次违约；重复执行不重复记违约；已签到的不受影响 | `jobs.mark_no_shows` | DB：`test_jobs.py`（`test_not_cancelled_before_deadline`、`test_cancelled_after_deadline_with_violation_and_notification`、`test_running_twice_does_not_double_count`、`test_checked_in_reservation_untouched`） | 已实现 |
+| REQ-M1-10 | 搜索座位 | 可按日期时段、楼宇、教室、插座条件搜索；只返回当前用户在该时段真正可约的座位（未被预约、未被 M2/M3 占用、座位与教室启用、院系允许、在开放时间内），与创建预约使用同一组规则；时段已开始或超过 `max_hours` 时返回与创建预约相同的错误码 | `api/rooms.py`、`availability.py`、`shared.py` | DB：`test_availability.py`（`test_search_returns_only_available_seats`、`test_search_includes_slots_touching_open_and_close_hours`、`test_search_rejects_started_slot_like_reservation`、`test_search_rejects_duration_over_max_hours`、`test_search_applies_department_rule_to_room_managers`、`test_search_excludes_disabled_seat`） | 已实现 |
+| REQ-M1-11 | 历史与再次预约 | 可查看自己的历史预约；可选择一条历史记录，为同一座位预约新的时段（遵守 REQ-M1-03/04） | `api/reservations.py`、`reservation_service.py` | DB：`test_reservations.py`（`test_history_filters_and_returns_details`、`test_rebook_creates_new_reservation_for_same_seat`、`test_cannot_rebook_another_users_history`） | 已实现 |
+| REQ-M1-12 | 运营统计 | 拥有 `seat:stats` 的用户可按日期范围、教室查看利用率（已签到小时数 / 有效开放座位小时数）、违约率（`no_show / (no_show + completed)`，不计 cancelled、booked）、各小时分布（ADR-012） | `api/admin.py`、`stats_service.py` | DB：`test_stats.py`（`test_usage_stats_counts_only_checked_in_and_closed_reservations`、`test_usage_stats_excludes_room_block_from_open_hours`、`test_usage_stats_does_not_merge_simultaneous_seats`） | 已实现 |
+| REQ-M1-13 | 插座标记 | 座位可标记为无插座、靠近固定插座、靠近移动导轨插座；搜索可按此筛选；座位详情显示标记 | `models.Seat.outlet`、`room_service.py`、`availability.py` | DB：`test_rooms.py::test_update_seat_changes_outlet_and_logs_disable`；`test_availability.py::test_search_filters_by_outlet_and_room` | 已实现 |
+| REQ-M1-14 | 系统参数 | 拥有 `seat:config` 的用户可修改 `max_hours`、提醒与自动取消的分钟数，修改后对新预约和下一轮扫描生效；`remind_late_min` 必须小于 `auto_cancel_min`，否则返回 422 | `api/admin.py`、`rules.py`、`schemas.SeatSettings` | DB：`test_stats.py`（`test_settings_defaults_and_update`、`test_settings_late_reminder_must_precede_auto_cancel`、`test_settings_update_affects_new_reservation`）；`test_jobs.py`（`test_respects_configured_deadline`、`test_before_reminder_respects_configured_window`） | 已实现 |
+| REQ-M1-15 | 违约记录 | 学生可查看自己的违约记录 | `api/reservations.py`、`reservation_service.py` | DB：`test_reservations.py::test_my_violations_returns_only_current_user` | 已实现 |
+| REQ-M1-16 | 每日总时长限制 | 限制每人每天的预约总时长，避免连续预约绕过单次 `max_hours` | — | — | 延后：任务书只规定单次最多 4 小时；规则与参数尚未定义，可能误伤学生（ADR-012、`docs/ethics-log.md`） |
+| REQ-M1-17 | 最远预约天数 | 限制最远可提前预约的天数，保护远期资源 | — | — | 延后：任务书未要求，增加参数会扩大接口与前端契约；v1 不限制（ADR-012） |
+| REQ-M1-18 | 签到码防暴力尝试 | 限制同一用户或同一预约的签到码错误次数，防止 6 位码被穷举 | — | — | 延后：需要先确定限制口径与误伤处理；作为伦理与安全风险记录（ADR-012） |
+| REQ-M1-19 | 违约申诉 | 学生可对违约记录申诉，管理员可撤销误判的违约 | — | — | 延后：涉及新的角色流程与 M2 门槛口径，待需求评审（`docs/ethics-log.md` E-01） |
 
 ## D 公共层（common 服务）
 
@@ -74,13 +78,13 @@
 
 | 编号 | 需求 | 验收标准 | 实现 | 验证 | 状态 |
 |---|---|---|---|---|---|
-| INT-01 | M3 → M1 维修下架 | 需下架的工单进入维修中后，该教室全部座位不出现在搜索结果中、不可预约；验收通过后自动恢复 | M1 `internal.py`、`block_service.py`、M3 `clients.py` | `test_internal_blocks.py`、`test_availability.py`；真实链路集成待联调 | 开发中（M1 侧已实现） |
-| INT-02 | M2 → M1 整室占用 | 最终审批通过后，教室在申请时段内不接受个人预约；取消后恢复 | M1 `internal.py`、`block_service.py`、M2 `clients.py` | `test_internal_blocks.py`、`test_availability.py`；真实链路集成待联调 | 开发中（M1 侧已实现） |
-| INT-03 | 写入来源追溯 | 每次座位状态变化记录来源（M1_RESERVATION / M1_ADMIN / M2_OCCUPY / M3_MAINTENANCE）和来源单号，可按座位查询 | M1 `seat_status_logs`、`availability.py` | `test_internal_blocks.py`、`test_availability.py`、`test_rooms.py` | 开发中（M1 侧已实现） |
-| INT-04 | 占用冲突处理 | 占用时段内已有的个人预约自动取消、通知学生、不记违约；接口返回被取消的预约 | M1 `block_service.py` | `test_internal_blocks.py` | 开发中（M1 侧已实现，待真实联调） |
-| INT-05 | 违约影响申请门槛 | 见 REQ-M2-01 | M1 `internal.py`、`block_service.py`、M2 `clients.py` | `test_internal_blocks.py` | 开发中（M1 侧已实现） |
+| INT-01 | M3 → M1 维修下架 | 需下架的工单进入维修中后，该教室全部座位不出现在搜索结果中、不可预约；验收通过后自动恢复；一个工单号只对应一次下架：释放后用同一幂等键重发得到首次结果的重放、不会重新下架，同一幂等键换了请求内容返回 409 `IDEMPOTENCY_KEY_REUSED`，换了幂等键返回 409 `BLOCK_ALREADY_RELEASED` | M1 `internal.py`、`block_service.py`、M3 `clients.py` | DB：`test_internal_blocks.py`（`test_create_block_cancels_overlapping_reservations_and_records_sources`、`test_open_ended_block_cancels_all_future_overlaps`、`test_release_block_is_idempotent_and_writes_unblocked_logs`、`test_reposting_released_block_follows_idempotency_then_lifecycle`）；`test_availability.py::test_search_returns_only_available_seats`；真实链路集成待联调 | 开发中（M1 侧已实现） |
+| INT-02 | M2 → M1 整室占用 | 最终审批通过后，教室在申请时段内不接受个人预约；取消后恢复；M2 只能占用和释放 `M2_OCCUPY` 来源的占用 | M1 `internal.py`、`block_service.py`、M2 `clients.py` | DB：`test_internal_blocks.py`（`test_m2_occupation_cancels_with_m2_reason`、`test_service_cannot_use_another_modules_block_source`、`test_service_cannot_release_another_modules_block`）；`test_reservations.py::test_create_reservation_rejects_room_block`；真实链路集成待联调 | 开发中（M1 侧已实现） |
+| INT-03 | 写入来源追溯 | 每次座位状态变化记录来源（M1_RESERVATION / M1_ADMIN / M2_OCCUPY / M3_MAINTENANCE）和来源单号，可按座位查询 | M1 `seat_status_logs`、`availability.py` | DB：`test_internal_blocks.py`、`test_availability.py::test_status_history_returns_source_and_reference`、`test_rooms.py`（`M1_ADMIN` 停用与释放日志） | 开发中（M1 侧已实现） |
+| INT-04 | 占用冲突处理 | 占用时段内已有的个人预约自动取消、通知学生（通知收件人为预约学生，时间带 `+08:00`）、不记违约；接口返回被取消的预约 | M1 `block_service.py`、`shared.release_reservation` | DB：`test_internal_blocks.py`（`test_create_block_cancels_overlapping_reservations_and_records_sources`、`test_block_only_cancels_reservations_that_overlap`） | 开发中（M1 侧已实现，待真实联调） |
+| INT-05 | 违约影响申请门槛 | 见 REQ-M2-01；M1 统计 `created_at >= since` 的违约次数 | M1 `internal.py`、`block_service.py`、M2 `clients.py` | DB：`test_internal_blocks.py::test_internal_violation_count_includes_since_boundary` | 开发中（M1 侧已实现） |
 | INT-06 | 跨模块操作审计 | 每次占用、释放都记审计，包含调用方服务名和 request_id | M1 `block_service.py`、Outbox → common | `test_internal_blocks.py` | 开发中（M1 侧已实现，待真实联调） |
-| INT-07 | 幂等 | 同一占用请求重复调用（同一幂等键）只生效一次，返回首次结果；同一幂等键对应不同请求内容时返回 409 `IDEMPOTENCY_KEY_REUSED` | `campus_common.idempotency`、M1 `internal.py` | `test_idempotency.py`、`test_internal_blocks.py` | 开发中（M1 侧已实现，待真实联调） |
+| INT-07 | 幂等 | 同一占用请求重复调用（同一幂等键）只生效一次，返回首次结果；同一幂等键对应不同请求内容时返回 409 `IDEMPOTENCY_KEY_REUSED` | `campus_common.idempotency`、M1 `internal.py` | DB：`test_idempotency.py`；`test_internal_blocks.py`（`test_same_idempotency_key_returns_first_result_once`、`test_concurrent_requests_with_same_key_create_one_block`、`test_concurrent_requests_with_different_keys_create_one_block`、`test_same_key_with_different_body_is_rejected`） | 开发中（M1 侧已实现，待真实联调） |
 
 ## 非功能需求
 

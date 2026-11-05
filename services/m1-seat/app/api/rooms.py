@@ -1,11 +1,13 @@
 """自习室与座位：主数据维护、搜索、可用性、签到码、状态追溯。"""
 
 from datetime import date
+from typing import Annotated
 
 from campus_common.auth import CurrentUser, CurrentUserDep, require_perm
 from campus_common.db import SessionDep
 from campus_common.errors import ERROR_RESPONSES
 from campus_common.pagination import Page, PageParams, page_params
+from campus_common.query import query_model
 from fastapi import APIRouter, Depends, Query
 
 from app import availability, checkin_service, room_service
@@ -24,7 +26,7 @@ async def list_rooms(
     is_whole_bookable: bool | None = Query(None, description="M2 申请选教室时传 true"),
     p: PageParams = Depends(page_params),
 ):
-    """院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）。"""
+    """院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；停用的教室只有 `seat:room_manage` 可见。"""
     return await room_service.list_rooms(
         session,
         user,
@@ -38,6 +40,7 @@ async def list_rooms(
 
 @router.get("/rooms/{room_id}", summary="自习室详情（含座位）", response_model=s.RoomDetail)
 async def get_room(room_id: int, user: CurrentUserDep, session: SessionDep):
+    """教室不存在或对当前用户不可见：404 `NOT_FOUND`。"""
     return await room_service.get_room(session, user, room_id)
 
 
@@ -45,6 +48,7 @@ async def get_room(room_id: int, user: CurrentUserDep, session: SessionDep):
 async def create_room(
     body: s.RoomCreate, session: SessionDep, user=Depends(require_perm("seat:room_manage"))
 ):
+    """同一星期配置多条开放时间：400 `INVALID_OPEN_HOURS`；同一楼宇重名：409 `ROOM_ALREADY_EXISTS`。"""
     return await room_service.create_room(session, body)
 
 
@@ -55,6 +59,10 @@ async def update_room(
     session: SessionDep,
     user=Depends(require_perm("seat:room_manage")),
 ):
+    """停用教室或注销自习室（`is_study_room` 由 true 改为 false）时，该教室尚未结束的有效预约全部取消
+    （`cancel_reason=ADMIN_DISABLED`，不记违约，通知学生）。
+
+    错误：404 `NOT_FOUND`；400 `INVALID_OPEN_HOURS`；409 `ROOM_ALREADY_EXISTS`。"""
     return await room_service.update_room(session, room_id, body)
 
 
@@ -65,6 +73,7 @@ async def create_seat(
     session: SessionDep,
     user=Depends(require_perm("seat:room_manage")),
 ):
+    """教室不存在：404 `NOT_FOUND`；同一教室座位编号重复：409 `SEAT_ALREADY_EXISTS`。"""
     return await room_service.create_seat(session, room_id, body)
 
 
@@ -75,6 +84,9 @@ async def update_seat(
     session: SessionDep,
     user=Depends(require_perm("seat:room_manage")),
 ):
+    """停用座位时，该座位尚未结束的有效预约全部取消（`cancel_reason=ADMIN_DISABLED`，不记违约，通知学生）。
+
+    座位不存在：404 `NOT_FOUND`。"""
     return await room_service.update_seat(session, seat_id, body)
 
 
@@ -82,21 +94,21 @@ async def update_seat(
 async def search_seats(
     user: CurrentUserDep,
     session: SessionDep,
-    date: date,
-    start_hour: int = Query(ge=0, le=23),
-    end_hour: int = Query(ge=1, le=24),
+    slot: Annotated[s.HourRange, Depends(query_model(s.HourRange))],
     building: str | None = None,
     room_id: int | None = None,
     outlet: s.Outlet | None = Query(None, description="按插座条件筛选"),
     p: PageParams = Depends(page_params),
 ):
-    """只返回该时段真正可约的座位：座位启用、在开放时间内、无有效预约、无 M2/M3 占用。"""
+    """只返回当前用户在该时段真正可约的座位，规则与创建预约相同：座位与教室启用、院系允许、
+    在开放时间内、无有效预约、无 M2/M3 占用。
+
+    时段本身不可约时与创建预约返回同样的错误：结束不晚于开始 422 `VALIDATION_ERROR`；
+    时段已开始 400 `RESERVATION_IN_PAST`；超过 `max_hours` 400 `INVALID_DURATION`。"""
     return await availability.search_seats(
         session,
         user,
-        day=date,
-        start_hour=start_hour,
-        end_hour=end_hour,
+        slot=slot,
         building=building,
         room_id=room_id,
         outlet=outlet,
@@ -110,6 +122,9 @@ async def search_seats(
     response_model=list[s.SeatAvailability],
 )
 async def room_availability(room_id: int, date: date, user: CurrentUserDep, session: SessionDep):
+    """每个座位每个整点：closed（不在开放时间）、
+    blocked（`M1_ADMIN` 停用或 `M2_OCCUPY`/`M3_MAINTENANCE` 占用）、reserved（有效预约）、free。
+    教室不存在或不可见：404 `NOT_FOUND`。"""
     return await availability.room_availability(session, user, room_id, date)
 
 
@@ -121,6 +136,7 @@ async def get_checkin_code(
     session: SessionDep,
     user=Depends(require_perm("seat:checkin_code")),
 ):
+    """业务日期当天的签到码，当天首次请求时生成。教室不存在：404 `NOT_FOUND`。"""
     return await checkin_service.get_checkin_code(session, room_id)
 
 
@@ -134,4 +150,5 @@ async def seat_status_history(
     session: SessionDep,
     user: CurrentUser = Depends(require_perm("seat:room_manage", "seat:stats")),
 ):
+    """座位不存在：404 `NOT_FOUND`。"""
     return await availability.status_history(session, seat_id)

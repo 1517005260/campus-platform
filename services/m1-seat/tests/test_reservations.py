@@ -22,8 +22,9 @@ from campus_common.timeutil import at_hour, now
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from tests.conftest import DAY
+
 pytestmark = pytest.mark.db
-DAY = now().date() + timedelta(days=2)
 
 
 def _room(
@@ -117,6 +118,49 @@ def test_create_reservation_uses_configured_max_hours(client, db, as_student):
 
     assert response.status_code == 400
     assert response.json()["code"] == "INVALID_DURATION"
+
+
+def _create(client, headers, seat: Seat, start_hour: int, end_hour: int):
+    return client.post(
+        "/api/v1/seat/reservations", json={**_body(start_hour, end_hour), "seat_id": seat.id}, headers=headers
+    )
+
+
+def test_create_reservation_accepts_exactly_max_hours(client, db, as_student):
+    _, (seat,) = _room(db)
+    assert _create(client, as_student, seat, 10, 14).status_code == 201
+    response = _create(client, as_student, seat, 14, 19)
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_DURATION"
+
+
+def test_create_reservation_accepts_open_and_close_hour_edges(client, db, as_student):
+    _, (seat,) = _room(db)
+    assert _create(client, as_student, seat, 8, 9).status_code == 201
+    assert _create(client, as_student, seat, 21, 22).status_code == 201
+    response = _create(client, as_student, seat, 20, 23)
+    assert response.status_code == 400
+    assert response.json()["code"] == "OUTSIDE_OPEN_HOURS"
+
+
+def test_create_reservation_rejects_slot_starting_now(client, db, clock, as_student):
+    _, (seat,) = _room(db)
+    clock.move_to(at_hour(DAY, 13))
+    response = _create(client, as_student, seat, 13, 14)
+    assert response.status_code == 400
+    assert response.json()["code"] == "RESERVATION_IN_PAST"
+    assert _create(client, as_student, seat, 14, 15).status_code == 201
+
+
+def test_reservation_times_use_business_timezone(client, db, as_student):
+    _, (seat,) = _room(db)
+    created = _create(client, as_student, seat, 14, 16)
+
+    mine = client.get("/api/v1/seat/reservations/mine", headers=as_student)
+
+    assert created.json()["start_at"] == "2026-10-20T14:00:00+08:00"
+    assert mine.json()["items"][0]["start_at"] == "2026-10-20T14:00:00+08:00"
+    assert mine.json()["items"][0]["end_at"] == "2026-10-20T16:00:00+08:00"
 
 
 def test_create_reservation_rejects_past(client, db, as_student):

@@ -31,6 +31,8 @@ markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-co
 
 [tool.coverage.run]
 source = ["app"]
+# 异步会话经 greenlet 执行，不开启 greenlet 跟踪时 await 之后的代码都会被算作未覆盖
+concurrency = ["greenlet", "thread"]
 omit = ["app/stubs.py"]
 
 [tool.coverage.report]

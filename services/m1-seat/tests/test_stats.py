@@ -93,6 +93,25 @@ def test_settings_defaults_and_update(client, db, as_student, as_config):
     assert db.scalar(select(Setting.value).where(Setting.key == "max_hours")) == 3
 
 
+@pytest.mark.parametrize(("remind_late_min", "status"), [(14, 200), (15, 422), (16, 422)])
+def test_settings_late_reminder_must_precede_auto_cancel(client, db, as_config, remind_late_min, status):
+    response = client.put(
+        "/api/v1/seat/settings",
+        json={
+            "max_hours": 4,
+            "remind_before_min": 15,
+            "remind_late_min": remind_late_min,
+            "auto_cancel_min": 15,
+        },
+        headers=as_config,
+    )
+    assert response.status_code == status
+    if status == 422:
+        assert response.json()["code"] == "VALIDATION_ERROR"
+        db.expire_all()
+        assert db.scalar(select(Setting.value).where(Setting.key == "remind_late_min")) is None
+
+
 def test_settings_update_affects_new_reservation(client, db, as_config):
     room, (seat,) = _room(db, open_hour=8, close_hour=22)
     combined = user_headers(settings, perms=["seat:config", "seat:reserve"], dept_id=1)
@@ -156,6 +175,27 @@ def test_usage_stats_uses_checked_hours_and_no_show_denominator(client, db, as_s
     assert body["by_hour"]["8"] == pytest.approx(0.5)
     assert body["by_hour"]["9"] == pytest.approx(0.5)
     assert body["by_hour"]["10"] == 0.0
+
+
+def test_usage_stats_counts_only_checked_in_and_closed_reservations(client, db, as_stats):
+    room, seats = _room(db, seats=5)
+    for seat, status in zip(
+        seats, ["completed", "no_show", "cancelled", "booked", "checked_in"], strict=True
+    ):
+        _reservation(db, room, seat, start_hour=8, end_hour=10, status=status, user_id=1000 + seat.id)
+
+    response = client.get(
+        "/api/v1/seat/stats/usage",
+        params={"date_from": DAY.isoformat(), "date_to": DAY.isoformat(), "room_id": room.id},
+        headers=as_stats,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["no_show_rate"] == pytest.approx(0.5)  # no_show / (no_show + completed)
+    assert body["utilization"] == pytest.approx(0.4)  # completed + checked_in：4 座位小时 / 10
+    assert body["by_hour"]["8"] == pytest.approx(0.4)
+    assert body["by_room"][0]["reservations"] == 5
 
 
 def test_usage_stats_does_not_merge_simultaneous_seats(client, db, as_stats):

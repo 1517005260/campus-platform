@@ -7,6 +7,7 @@ Internal* 开头的模型属于跨模块契约，改动需要调用方（M2、M3
 from datetime import date
 from typing import Literal
 
+from campus_common.timeutil import TimeRangeModel
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 RoomType = Literal["classroom", "library", "other"]
@@ -46,17 +47,19 @@ class RoomCreate(RoomBase):
     pass
 
 
+# PATCH 模型：没传的字段表示不修改（默认值不参与校验）；传了就按字段类型校验，
+# 只有本身可以为空的字段（如 dept_id）才接受 null，其他字段传 null 返回 422。
 class RoomUpdate(BaseModel):
-    building: str | None = None
-    floor: int | None = None
-    name: str | None = None
-    type: RoomType | None = None
-    dept_id: int | None = None
-    capacity: int | None = None
-    is_study_room: bool | None = None
-    is_whole_bookable: bool | None = None
-    open_hours: list[OpenHour] | None = None
-    status: Literal["enabled", "disabled"] | None = None
+    building: str = Field(None, max_length=50)
+    floor: int = None
+    name: str = Field(None, max_length=50)
+    type: RoomType = None
+    dept_id: int | None = Field(None, description="null 表示改为全校开放")
+    capacity: int = Field(None, ge=1)
+    is_study_room: bool = Field(None, description="改为 false 即注销自习室，尚未结束的有效预约被取消")
+    is_whole_bookable: bool = None
+    open_hours: list[OpenHour] = None
+    status: Literal["enabled", "disabled"] = None
 
 
 class Room(RoomBase):
@@ -70,8 +73,10 @@ class SeatCreate(BaseModel):
 
 
 class SeatUpdate(BaseModel):
-    outlet: Outlet | None = None
-    status: Literal["enabled", "disabled"] | None = None
+    """PATCH 模型，规则同 RoomUpdate。"""
+
+    outlet: Outlet = None
+    status: Literal["enabled", "disabled"] = None
 
 
 class Seat(BaseModel):
@@ -104,6 +109,8 @@ class SeatAvailability(BaseModel):
 
 # ---------- 预约 ----------
 class HourRange(BaseModel):
+    """整点时段（业务时区），预约、复订的请求体，也是座位搜索的查询参数。结束不晚于开始时返回 422。"""
+
     date: date
     start_hour: int = Field(ge=0, le=23, description="开始整点")
     end_hour: int = Field(ge=1, le=24, description="结束整点（不含）")
@@ -159,8 +166,17 @@ class SeatSettings(BaseModel):
 
     max_hours: int = Field(4, ge=1, le=24, description="单次预约最多小时数")
     remind_before_min: int = Field(15, ge=0, description="开始前多少分钟提醒")
-    remind_late_min: int = Field(10, ge=0, description="开始后多少分钟未签到再次提醒")
+    remind_late_min: int = Field(
+        10, ge=0, description="开始后多少分钟未签到再次提醒，必须小于 auto_cancel_min"
+    )
     auto_cancel_min: int = Field(15, ge=1, description="开始后多少分钟未签到自动取消并记违约")
+
+    @model_validator(mode="after")
+    def _late_reminder_before_cancel(self):
+        # 否则预约在提醒之前就被取消，未签到提醒永远不会发出
+        if self.remind_late_min >= self.auto_cancel_min:
+            raise ValueError("remind_late_min 必须小于 auto_cancel_min")
+        return self
 
 
 class RoomUsage(BaseModel):
@@ -187,19 +203,20 @@ class StatusHistoryItem(BaseModel):
 
 
 # ---------- 跨模块契约（M2、M3 调用） ----------
-class InternalBlockCreate(BaseModel):
+class InternalTimeRange(TimeRangeModel):
+    """查询时段 [start_at, end_at)，结束不晚于开始时返回 422。"""
+
+    start_at: AwareDatetime
+    end_at: AwareDatetime
+
+
+class InternalBlockCreate(TimeRangeModel):
     room_id: int
     start_at: AwareDatetime
     end_at: AwareDatetime | None = Field(None, description="为空表示结束时间未知（维修中）")
     source: BlockSource
     ref_id: int = Field(description="M2 申请 ID 或 M3 工单 ID")
     reason: str = Field(max_length=200)
-
-    @model_validator(mode="after")
-    def _time_order(self):
-        if self.end_at is not None and self.end_at <= self.start_at:
-            raise ValueError("end_at 必须晚于 start_at")
-        return self
 
 
 class InternalBlockResult(BaseModel):

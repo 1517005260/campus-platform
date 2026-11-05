@@ -30,9 +30,11 @@ markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-co
 
 [tool.coverage.run]
 source = ["app"]
+# 异步会话经 greenlet 执行，不开启 greenlet 跟踪时 await 之后的代码都会被算作未覆盖
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 90
 
 [tool.mutmut]
 # 只对核心业务逻辑做变异；随着实现推进把新的业务文件加进来
@@ -45,5 +47,6 @@ source_paths = [
     "app/room_service.py",
     "app/stats_service.py",
     "app/rules.py",
+    "app/shared.py",
 ]
 also_copy = ["app", "alembic.ini", "migrations"]

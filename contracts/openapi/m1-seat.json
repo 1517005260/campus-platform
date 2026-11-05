@@ -78,6 +78,7 @@
         "type": "object"
       },
       "HourRange": {
+        "description": "整点时段（业务时区），预约、复订的请求体，也是座位搜索的查询参数。结束不晚于开始时返回 422。",
         "properties": {
           "date": {
             "format": "date",
@@ -875,26 +876,14 @@
       "RoomUpdate": {
         "properties": {
           "building": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Building"
+            "maxLength": 50,
+            "title": "Building",
+            "type": "string"
           },
           "capacity": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capacity"
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
           },
           "dept_id": {
             "anyOf": [
@@ -905,96 +894,50 @@
                 "type": "null"
               }
             ],
+            "description": "null 表示改为全校开放",
             "title": "Dept Id"
           },
           "floor": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Floor"
+            "title": "Floor",
+            "type": "integer"
           },
           "is_study_room": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Study Room"
+            "description": "改为 false 即注销自习室，尚未结束的有效预约被取消",
+            "title": "Is Study Room",
+            "type": "boolean"
           },
           "is_whole_bookable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Whole Bookable"
+            "title": "Is Whole Bookable",
+            "type": "boolean"
           },
           "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
+            "maxLength": 50,
+            "title": "Name",
+            "type": "string"
           },
           "open_hours": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/OpenHour"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Open Hours"
+            "items": {
+              "$ref": "#/components/schemas/OpenHour"
+            },
+            "title": "Open Hours",
+            "type": "array"
           },
           "status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "enabled",
-                  "disabled"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "enabled",
+              "disabled"
             ],
-            "title": "Status"
+            "title": "Status",
+            "type": "string"
           },
           "type": {
-            "anyOf": [
-              {
-                "enum": [
-                  "classroom",
-                  "library",
-                  "other"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "classroom",
+              "library",
+              "other"
             ],
-            "title": "Type"
+            "title": "Type",
+            "type": "string"
           }
         },
         "title": "RoomUpdate",
@@ -1162,7 +1105,7 @@
           },
           "remind_late_min": {
             "default": 10,
-            "description": "开始后多少分钟未签到再次提醒",
+            "description": "开始后多少分钟未签到再次提醒，必须小于 auto_cancel_min",
             "minimum": 0.0,
             "title": "Remind Late Min",
             "type": "integer"
@@ -1172,37 +1115,24 @@
         "type": "object"
       },
       "SeatUpdate": {
+        "description": "PATCH 模型，规则同 RoomUpdate。",
         "properties": {
           "outlet": {
-            "anyOf": [
-              {
-                "enum": [
-                  "none",
-                  "fixed",
-                  "rail"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "none",
+              "fixed",
+              "rail"
             ],
-            "title": "Outlet"
+            "title": "Outlet",
+            "type": "string"
           },
           "status": {
-            "anyOf": [
-              {
-                "enum": [
-                  "enabled",
-                  "disabled"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "enabled",
+              "disabled"
             ],
-            "title": "Status"
+            "title": "Status",
+            "type": "string"
           }
         },
         "title": "SeatUpdate",
@@ -1380,7 +1310,7 @@
   "paths": {
     "/api/v1/seat/reservations": {
       "post": {
-        "description": "校验：整点、时长不超过 max_hours、在开放时间内、院系准入、座位与本人时段均无冲突、\n无 M2/M3 占用。冲突返回 409 SEAT_NOT_AVAILABLE / USER_TIME_CONFLICT。",
+        "description": "校验与座位搜索使用同一组规则。错误：\n422 `VALIDATION_ERROR`（结束不晚于开始）；\n400 `RESERVATION_IN_PAST`、`INVALID_DURATION`（超过 `max_hours`）、`OUTSIDE_OPEN_HOURS`；\n404 `NOT_FOUND`（座位不存在）；403 `DEPT_RESTRICTED`；\n409 `SEAT_NOT_AVAILABLE`（座位或教室停用、被预约、被 M2/M3 占用）、`USER_TIME_CONFLICT`。",
         "operationId": "create_reservation_api_v1_seat_reservations_post",
         "requestBody": {
           "content": {
@@ -1635,6 +1565,7 @@
     },
     "/api/v1/seat/reservations/{reservation_id}/cancel": {
       "post": {
+        "description": "只能取消自己未开始的 booked 预约。不是本人的预约：404 `NOT_FOUND`；其他状态或已开始：\n409 `RESERVATION_STATE_CONFLICT`。",
         "operationId": "cancel_reservation_api_v1_seat_reservations__reservation_id__cancel_post",
         "parameters": [
           {
@@ -1742,7 +1673,7 @@
     },
     "/api/v1/seat/reservations/{reservation_id}/check-in": {
       "post": {
-        "description": "签到窗口：开始前 15 分钟至开始后 auto_cancel_min 分钟。签到码错误返回 400 CHECKIN_CODE_INVALID。",
+        "description": "签到窗口：开始前 15 分钟至开始后 `auto_cancel_min` 分钟之前；签到码为教室屏幕当前显示的当天的码。\n\n错误：404 `NOT_FOUND`（不是本人的预约）；409 `RESERVATION_STATE_CONFLICT`（不是 booked，包括已被取消）；\n400 `CHECKIN_WINDOW_CLOSED`、`CHECKIN_CODE_INVALID`。",
         "operationId": "check_in_api_v1_seat_reservations__reservation_id__check_in_post",
         "parameters": [
           {
@@ -1860,6 +1791,7 @@
     },
     "/api/v1/seat/reservations/{reservation_id}/rebook": {
       "post": {
+        "description": "为历史预约的同一座位预约新时段。历史预约不是本人的：404 `NOT_FOUND`；其余错误同\"预约座位\"。",
         "operationId": "rebook_api_v1_seat_reservations__reservation_id__rebook_post",
         "parameters": [
           {
@@ -1977,7 +1909,7 @@
     },
     "/api/v1/seat/rooms": {
       "get": {
-        "description": "院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）。",
+        "description": "院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；停用的教室只有 `seat:room_manage` 可见。",
         "operationId": "list_rooms_api_v1_seat_rooms_get",
         "parameters": [
           {
@@ -2174,6 +2106,7 @@
         ]
       },
       "post": {
+        "description": "同一星期配置多条开放时间：400 `INVALID_OPEN_HOURS`；同一楼宇重名：409 `ROOM_ALREADY_EXISTS`。",
         "operationId": "create_room_api_v1_seat_rooms_post",
         "requestBody": {
           "content": {
@@ -2280,6 +2213,7 @@
     },
     "/api/v1/seat/rooms/{room_id}": {
       "get": {
+        "description": "教室不存在或对当前用户不可见：404 `NOT_FOUND`。",
         "operationId": "get_room_api_v1_seat_rooms__room_id__get",
         "parameters": [
           {
@@ -2385,6 +2319,7 @@
         ]
       },
       "patch": {
+        "description": "停用教室或注销自习室（`is_study_room` 由 true 改为 false）时，该教室尚未结束的有效预约全部取消\n（`cancel_reason=ADMIN_DISABLED`，不记违约，通知学生）。\n\n错误：404 `NOT_FOUND`；400 `INVALID_OPEN_HOURS`；409 `ROOM_ALREADY_EXISTS`。",
         "operationId": "update_room_api_v1_seat_rooms__room_id__patch",
         "parameters": [
           {
@@ -2502,6 +2437,7 @@
     },
     "/api/v1/seat/rooms/{room_id}/availability": {
       "get": {
+        "description": "每个座位每个整点：closed（不在开放时间）、\nblocked（`M1_ADMIN` 停用或 `M2_OCCUPY`/`M3_MAINTENANCE` 占用）、reserved（有效预约）、free。\n教室不存在或不可见：404 `NOT_FOUND`。",
         "operationId": "room_availability_api_v1_seat_rooms__room_id__availability_get",
         "parameters": [
           {
@@ -2623,6 +2559,7 @@
     },
     "/api/v1/seat/rooms/{room_id}/checkin-code": {
       "get": {
+        "description": "业务日期当天的签到码，当天首次请求时生成。教室不存在：404 `NOT_FOUND`。",
         "operationId": "get_checkin_code_api_v1_seat_rooms__room_id__checkin_code_get",
         "parameters": [
           {
@@ -2730,6 +2667,7 @@
     },
     "/api/v1/seat/rooms/{room_id}/seats": {
       "post": {
+        "description": "教室不存在：404 `NOT_FOUND`；同一教室座位编号重复：409 `SEAT_ALREADY_EXISTS`。",
         "operationId": "create_seat_api_v1_seat_rooms__room_id__seats_post",
         "parameters": [
           {
@@ -2847,41 +2785,9 @@
     },
     "/api/v1/seat/seats/search": {
       "get": {
-        "description": "只返回该时段真正可约的座位：座位启用、在开放时间内、无有效预约、无 M2/M3 占用。",
+        "description": "只返回当前用户在该时段真正可约的座位，规则与创建预约相同：座位与教室启用、院系允许、\n在开放时间内、无有效预约、无 M2/M3 占用。\n\n时段本身不可约时与创建预约返回同样的错误：结束不晚于开始 422 `VALIDATION_ERROR`；\n时段已开始 400 `RESERVATION_IN_PAST`；超过 `max_hours` 400 `INVALID_DURATION`。",
         "operationId": "search_seats_api_v1_seat_seats_search_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "date",
-            "required": true,
-            "schema": {
-              "format": "date",
-              "title": "Date",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "start_hour",
-            "required": true,
-            "schema": {
-              "maximum": 23,
-              "minimum": 0,
-              "title": "Start Hour",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "end_hour",
-            "required": true,
-            "schema": {
-              "maximum": 24,
-              "minimum": 1,
-              "title": "End Hour",
-              "type": "integer"
-            }
-          },
           {
             "in": "query",
             "name": "building",
@@ -2935,6 +2841,38 @@
               ],
               "description": "按插座条件筛选",
               "title": "Outlet"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_hour",
+            "required": true,
+            "schema": {
+              "maximum": 23,
+              "minimum": 0,
+              "title": "Start Hour",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_hour",
+            "required": true,
+            "schema": {
+              "maximum": 24,
+              "minimum": 1,
+              "title": "End Hour",
+              "type": "integer"
             }
           },
           {
@@ -3060,6 +2998,7 @@
     },
     "/api/v1/seat/seats/{seat_id}": {
       "patch": {
+        "description": "停用座位时，该座位尚未结束的有效预约全部取消（`cancel_reason=ADMIN_DISABLED`，不记违约，通知学生）。\n\n座位不存在：404 `NOT_FOUND`。",
         "operationId": "update_seat_api_v1_seat_seats__seat_id__patch",
         "parameters": [
           {
@@ -3177,6 +3116,7 @@
     },
     "/api/v1/seat/seats/{seat_id}/status-history": {
       "get": {
+        "description": "座位不存在：404 `NOT_FOUND`。",
         "operationId": "seat_status_history_api_v1_seat_seats__seat_id__status_history_get",
         "parameters": [
           {
@@ -3382,6 +3322,7 @@
         ]
       },
       "put": {
+        "description": "`remind_late_min` 必须小于 `auto_cancel_min`，否则 422 `VALIDATION_ERROR`。",
         "operationId": "put_settings_api_v1_seat_settings_put",
         "requestBody": {
           "content": {
@@ -3488,6 +3429,7 @@
     },
     "/api/v1/seat/stats/usage": {
       "get": {
+        "description": "利用率与违约率口径见 ADR-012。\n\n`date_to` 早于 `date_from`：400 `INVALID_DATE_RANGE`；教室不存在：404 `NOT_FOUND`。",
         "operationId": "usage_stats_api_v1_seat_stats_usage_get",
         "parameters": [
           {
@@ -3772,7 +3714,7 @@
     },
     "/internal/v1/blocks": {
       "post": {
-        "description": "在 [start_at, end_at) 内下架该教室全部座位，并记录写入来源 (source, ref_id)。\n\n时段内已有的个人预约自动取消（cancel_reason=BLOCKED_BY_M2/M3）、通知学生、不记违约，\n在返回值中列出。同一 (source, ref_id) 重复调用返回同一结果。",
+        "description": "在 [start_at, end_at) 内下架该教室全部座位，并记录写入来源 (source, ref_id)。\n\n时段内已有的个人预约自动取消（cancel_reason=BLOCKED_BY_M2/M3）、通知学生、不记违约，\n在返回值中列出。\n\n先按幂等键处理：同一幂等键 + 同样的请求，无论占用后来是否已释放，都原样重放首次结果（200）；\n同一幂等键 + 不同的请求返回 409 `IDEMPOTENCY_KEY_REUSED`。M2、M3 的键按单号固定\n（`m2-app-{id}-occupy`、`m3-order-{id}-block`），因此它们重发同一单号只会走到这一步。\n换了幂等键时再按 (source, ref_id) 处理：一个单号只对应一次占用，已释放返回 409 `BLOCK_ALREADY_RELEASED`，\n请求不同返回 409 `BLOCK_REFERENCE_CONFLICT`，相同则返回已有的 block_id 且不再取消预约。\n\n其他错误：403 `BLOCK_SOURCE_FORBIDDEN`（source 与调用方不符）；404 `NOT_FOUND`（教室不存在）；\n422 `VALIDATION_ERROR`（end_at 不晚于 start_at）。",
         "operationId": "create_block_internal_v1_blocks_post",
         "parameters": [
           {
@@ -3919,7 +3861,7 @@
     },
     "/internal/v1/blocks/{source}/{ref_id}": {
       "delete": {
-        "description": "M2 撤销/超时、M3 验收通过时调用。幂等：不存在时返回 released=false。",
+        "description": "M2 撤销/超时、M3 验收通过时调用。幂等：不存在或已释放时返回 released=false。\n\nsource 与调用方不符：403 `BLOCK_SOURCE_FORBIDDEN`。",
         "operationId": "release_block_internal_v1_blocks__source___ref_id__delete",
         "parameters": [
           {
@@ -4067,6 +4009,7 @@
     },
     "/internal/v1/rooms/{room_id}": {
       "get": {
+        "description": "教室不存在：404 `NOT_FOUND`。",
         "operationId": "internal_get_room_internal_v1_rooms__room_id__get",
         "parameters": [
           {
@@ -4201,7 +4144,7 @@
     },
     "/internal/v1/rooms/{room_id}/reservations": {
       "get": {
-        "description": "M2 审批人审批前查看\"批准后会影响多少人\"。",
+        "description": "M2 审批人审批前查看\"批准后会影响多少人\"。\n\n教室不存在：404 `NOT_FOUND`；end_at 不晚于 start_at：422 `VALIDATION_ERROR`。",
         "operationId": "room_reservations_internal_v1_rooms__room_id__reservations_get",
         "parameters": [
           {
@@ -4360,6 +4303,7 @@
     },
     "/internal/v1/users/{user_id}/violations": {
       "get": {
+        "description": "统计 created_at >= since 的违约次数（含 since 时刻）。\n\n只允许 M2 调用，其他服务：403 `SERVICE_FORBIDDEN`。",
         "operationId": "violation_count_internal_v1_users__user_id__violations_get",
         "parameters": [
           {
