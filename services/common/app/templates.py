@@ -47,6 +47,14 @@ _ADMIN_CANCEL: dict[str, Callable[[str], tuple[str, str]]] = {
     ),
 }
 
+# M3 超时升级通知里工单所处的状态（只有这三个状态配置升级规则）
+_REPAIR_STATUS = {"dispatched": "已派单、待开始维修", "in_progress": "维修中", "pending_acceptance": "待验收"}
+
+
+def _order(p: dict[str, Any]) -> str:
+    return f"报修工单 #{p['order_id']}（{p['category']}）"
+
+
 TEMPLATES: dict[str, Renderer] = {
     "seat.remind_before": lambda p: (
         "自习预约即将开始",
@@ -68,6 +76,41 @@ TEMPLATES: dict[str, Renderer] = {
         f"{'：' + p['reason'] if p.get('reason') else ''}），预约已取消，不记违约。",
     ),
     "seat.reservation_cancelled_by_admin": lambda p: _ADMIN_CANCEL[p["cause"]](_slot(p)),
+    "repair.reported": lambda p: (
+        "新的报修待派单",
+        f"{p['room']} 报修了{p['category']}故障（报修工单 #{p['order_id']}），请尽快派单。",
+    ),
+    "repair.cancelled": lambda p: (
+        "报修工单已取消",
+        f"{_order(p)}已被报修人取消，无需派单。取消原因：{p['reason']}",
+    ),
+    "repair.dispatched": lambda p: (
+        "你有新的维修任务",
+        f"{_order(p)}已派给你，请在 {fmt_time(p['deadline_at'])} 前完成。"
+        f"{'开始维修时系统会下架整间教室，验收通过后恢复。' if p['blocks_room'] else ''}",
+    ),
+    "repair.started": lambda p: (
+        "报修工单开始维修",
+        f"你提交的{_order(p)}已开始维修{'，维修期间该教室暂停预约' if p['blocks_room'] else ''}。",
+    ),
+    "repair.completed": lambda p: (
+        "报修工单待验收",
+        f"你提交的{_order(p)}已完工：{p['note']}。请确认后验收评价；"
+        f"完工 {p['accept_after_hours']} 小时后仍未验收的，管理员可代为验收。",
+    ),
+    "repair.rejected": lambda p: (
+        "维修验收未通过",
+        f"{_order(p)}验收未通过：{p['reason']}。请继续维修{'，教室保持下架' if p['blocks_room'] else ''}。",
+    ),
+    "repair.accepted": lambda p: (
+        "维修工单已验收",
+        f"{_order(p)}已{'由管理员代为' if p['by_admin'] else '由报修人'}验收通过，评分 {p['rating']} 星。",
+    ),
+    "repair.escalated": lambda p: (
+        "报修工单超时升级",
+        f"{_order(p)}自 {fmt_time(p['since'])} 起处于“{_REPAIR_STATUS[p['status']]}”状态，"
+        f"每超过 {p['timeout_hours']} 小时升级一次，现已升级到第 {p['level']} 级，请督办。",
+    ),
     "common.roles_changed": lambda p: (
         "你的角色已变更",
         f"管理员已将你的角色调整为：{p['roles'] or '无'}。重新登录后生效。",

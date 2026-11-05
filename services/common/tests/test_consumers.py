@@ -130,6 +130,74 @@ ESCALATED = ORDER | {
 }
 
 
+@pytest.mark.parametrize(
+    ("template", "params", "title", "content"),
+    [
+        (
+            "repair.reported",
+            ORDER | {"room": "第三教学楼 H3106"},
+            "新的报修待派单",
+            "第三教学楼 H3106 报修了空调故障（报修工单 #7），请尽快派单。",
+        ),
+        (
+            "repair.cancelled",
+            ORDER | {"reason": "已自行修好"},
+            "报修工单已取消",
+            "报修工单 #7（空调）已被报修人取消，无需派单。取消原因：已自行修好",
+        ),
+        (
+            "repair.dispatched",
+            ORDER | {"deadline_at": "2026-11-05T10:00:00+00:00", "blocks_room": True},
+            "你有新的维修任务",
+            "报修工单 #7（空调）已派给你，请在 11月5日 18:00 前完成。"
+            "开始维修时系统会下架整间教室，验收通过后恢复。",
+        ),
+        (
+            "repair.dispatched",
+            ORDER | {"deadline_at": "2026-11-05T10:00:00+00:00", "blocks_room": False},
+            "你有新的维修任务",
+            "报修工单 #7（空调）已派给你，请在 11月5日 18:00 前完成。",
+        ),
+        (
+            "repair.started",
+            ORDER | {"blocks_room": True},
+            "报修工单开始维修",
+            "你提交的报修工单 #7（空调）已开始维修，维修期间该教室暂停预约。",
+        ),
+        (
+            "repair.completed",
+            ORDER | {"note": "已更换压缩机", "accept_after_hours": 72},
+            "报修工单待验收",
+            "你提交的报修工单 #7（空调）已完工：已更换压缩机。"
+            "请确认后验收评价；完工 72 小时后仍未验收的，管理员可代为验收。",
+        ),
+        (
+            "repair.rejected",
+            ORDER | {"reason": "仍不制冷", "blocks_room": False},
+            "维修验收未通过",
+            "报修工单 #7（空调）验收未通过：仍不制冷。请继续维修。",
+        ),
+        (
+            "repair.accepted",
+            ORDER | {"rating": 4, "by_admin": True},
+            "维修工单已验收",
+            "报修工单 #7（空调）已由管理员代为验收通过，评分 4 星。",
+        ),
+        (
+            "repair.escalated",
+            ESCALATED,
+            "报修工单超时升级",
+            "报修工单 #7（空调）自 11月5日 14:00 起处于“维修中”状态，"
+            "每超过 72 小时升级一次，现已升级到第 2 级，请督办。",
+        ),
+    ],
+)
+async def test_repair_templates_describe_the_event_in_business_time(db, template, params, title, content):
+    await handle_notification(envelope(NotificationSend(user_ids=[1], template=template, params=params)))
+    n = db.scalar(select(Notification))
+    assert (n.title, n.content) == (title, content)
+
+
 async def test_audit_keeps_request_id(db):
     e = envelope(
         AuditRecord(
