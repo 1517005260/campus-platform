@@ -20,7 +20,10 @@ async def report(
     session: SessionDep,
     user: Reporter = Depends(require_perm("repair:report")),
 ):
-    """校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。"""
+    """校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。
+
+    错误：400 `ROOM_NOT_FOUND`（M1 中没有该教室）、400 `UNKNOWN_CATEGORY`、
+    502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 不可达或拒绝调用）。"""
     return await orders.report(session, user, body)
 
 
@@ -31,6 +34,7 @@ async def mine(
     user: Reporter = Depends(require_perm("repair:report")),
     p: PageParams = Depends(page_params),
 ):
+    """本人上报的工单，新的在前。"""
     return await orders.list_mine(session, user, status, p)
 
 
@@ -42,6 +46,7 @@ async def detail(
         require_perm("repair:report", "repair:dispatch", "repair:work", "repair:manage")
     ),
 ):
+    """报修人本人、被指派的维修工、调度与管理可见；其他人 404 `NOT_FOUND`（不暴露工单是否存在）。"""
     return await orders.detail(session, user, order_id)
 
 
@@ -52,7 +57,10 @@ async def cancel(
     session: SessionDep,
     user: Reporter = Depends(require_perm("repair:report")),
 ):
-    """只有 submitted 状态可取消，否则 409 ORDER_STATE_CONFLICT。"""
+    """submitted → cancelled，通知调度员不必再派单。
+
+    错误：404 `NOT_FOUND`（看不到该工单）、403 `FORBIDDEN`（看得到但不是报修人）、
+    409 `ORDER_STATE_CONFLICT`（已派单或已结束）。"""
     return await orders.cancel(session, user, order_id, body)
 
 
@@ -63,8 +71,13 @@ async def accept(
     session: SessionDep,
     user: Reporter = Depends(require_perm("repair:report", "repair:manage")),
 ):
-    """pending_acceptance → closed。报修人本人验收；超过 admin_accept_after_hours 后
-    repair:manage 可代验收。若曾下架教室，调用 M1 释放，成功后才关闭工单。"""
+    """pending_acceptance → closed，通知维修工。报修人本人验收；完工 admin_accept_after_hours 后（含该时刻）
+    repair:manage 可代验收（closed_by 记录实际操作人）。若曾下架教室，先调用 M1 释放，成功后才关闭工单。
+
+    错误：404 `NOT_FOUND`（看不到该工单）、409 `ORDER_STATE_CONFLICT`（不在待验收）、
+    403 `ADMIN_ACCEPT_TOO_EARLY`（管理员代验收时间未到）、
+    403 `FORBIDDEN`（看得到但既不是报修人也不能代验收）、
+    502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 释放失败，工单保持待验收）。"""
     return await orders.accept(session, user, order_id, body)
 
 
@@ -75,5 +88,8 @@ async def reject_acceptance(
     session: SessionDep,
     user: Reporter = Depends(require_perm("repair:report")),
 ):
-    """pending_acceptance → in_progress，教室保持下架。"""
+    """pending_acceptance → in_progress，教室保持下架，通知维修工。
+
+    错误：404 `NOT_FOUND`（看不到该工单）、403 `FORBIDDEN`（看得到但不是报修人）、
+    409 `ORDER_STATE_CONFLICT`（不在待验收）。"""
     return await orders.reject(session, user, order_id, body)

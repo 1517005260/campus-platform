@@ -22,7 +22,7 @@ async def list_orders(
     user: CurrentUser = Depends(require_perm("repair:dispatch", "repair:work", "repair:manage")),
     p: PageParams = Depends(page_params),
 ):
-    """只有 repair:work 的用户只能看到派给自己的工单。"""
+    """新的在前。只有 repair:work 的用户只能看到派给自己的工单。"""
     return await orders.list_orders(
         session,
         user,
@@ -41,7 +41,11 @@ async def dispatch(
     session: SessionDep,
     user: CurrentUser = Depends(require_perm("repair:dispatch")),
 ):
-    """submitted → dispatched。assignee 必须拥有 repair:work。通知维修工。"""
+    """submitted → dispatched，通知维修工。assignee 必须拥有 repair:work（调用 common 校验）。
+
+    错误：400 `DEADLINE_NOT_FUTURE`（截止时间不晚于现在）、400 `ASSIGNEE_NOT_WORKER`、
+    404 `NOT_FOUND`、409 `ORDER_STATE_CONFLICT`（不在 submitted）、
+    502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（common 不可达或拒绝调用）。"""
     return await orders.dispatch(session, user, order_id, body)
 
 
@@ -51,8 +55,12 @@ async def start(
     session: SessionDep,
     user: CurrentUser = Depends(require_perm("repair:work")),
 ):
-    """dispatched → in_progress。blocks_room=true 时先调用 M1 下架教室，
-    成功后才改状态；M1 失败则本地不变并返回 502。"""
+    """dispatched → in_progress，通知报修人。blocks_room=true 时先调用 M1 下架教室，成功后才改状态；
+    下架起点在首次尝试时固定，重试发出相同的请求（幂等键 m3-order-{id}-block）。
+
+    错误：404 `NOT_FOUND`（看不到该工单）、403 `NOT_ASSIGNEE`（看得到但不是被指派人）、
+    409 `ORDER_STATE_CONFLICT`（不在 dispatched）、
+    502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 失败，工单保持 dispatched）；M1 的业务错误原样返回。"""
     return await orders.start(session, user, order_id)
 
 
@@ -63,7 +71,10 @@ async def complete(
     session: SessionDep,
     user: CurrentUser = Depends(require_perm("repair:work")),
 ):
-    """in_progress → pending_acceptance。教室在验收通过前保持下架。通知报修人验收。"""
+    """in_progress → pending_acceptance。教室在验收通过前保持下架。通知报修人验收。
+
+    错误：404 `NOT_FOUND`（看不到该工单）、403 `NOT_ASSIGNEE`、
+    409 `ORDER_STATE_CONFLICT`（不在 in_progress）。"""
     return await orders.complete(session, user, order_id, body)
 
 

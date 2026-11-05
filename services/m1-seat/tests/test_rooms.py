@@ -2,10 +2,11 @@
 
 import pytest
 from app.models import Outbox, Reservation, Room, RoomOpenHour, Seat, SeatStatusLog, Violation
+from campus_common.testing import NOW
 from campus_common.timeutil import at_hour
 from sqlalchemy import func, select
 
-from tests.conftest import DAY, NOW
+from tests.conftest import DAY
 
 pytestmark = pytest.mark.db
 

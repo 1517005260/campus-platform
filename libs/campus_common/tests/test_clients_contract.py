@@ -7,7 +7,7 @@
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import get_args
 
@@ -99,6 +99,26 @@ async def test_m1_block_create_and_release(monkeypatch, m1):
         "source"
     ]
     assert set(get_args(BlockSource)) == set(source["enum"])
+
+
+async def test_m1_block_request_is_identical_for_the_same_instant_in_any_offset(monkeypatch, m1):
+    """M1 按请求内容核对幂等键：同一时刻用不同时区表示时，发出的请求必须完全相同。"""
+    calls = record_service_calls(monkeypatch, m1, {"block_id": 1, "cancelled_reservations": []})
+    biz = datetime.fromisoformat("2026-10-20T06:00:00+08:00")
+    utc = datetime.fromisoformat("2026-10-19T22:00:00+00:00")
+    for start in (biz, utc):
+        await m1.create_block(
+            source="M3_MAINTENANCE",
+            ref_id=7,
+            room_id=3,
+            start_at=start,
+            end_at=start + timedelta(hours=2),
+            reason="r",
+            idempotency_key="m3-order-7-block",
+        )
+    assert calls[0][2] == calls[1][2]
+    assert calls[0][2]["json"]["start_at"] == "2026-10-20T06:00:00+08:00"
+    assert calls[0][2]["json"]["end_at"] == "2026-10-20T08:00:00+08:00"
 
 
 async def test_m1_reservations_and_violations(monkeypatch, m1):

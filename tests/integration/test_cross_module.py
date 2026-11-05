@@ -19,7 +19,6 @@ def _room_sources(http, headers, seat_id):
     return {(h["source"], h["ref_id"], h["state"]) for h in history}
 
 
-@PENDING
 def test_m3_maintenance_blocks_and_restores_room(http, login):
     reporter, dispatcher, worker, admin = (
         login("student"),

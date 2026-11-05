@@ -1,31 +1,22 @@
 """M1 测试的特有 fixture。
 
-通用 fixture（client、migrated、db、db_seed）由 campus_common 的 pytest 插件提供。
+通用 fixture（client、migrated、db、db_seed、clock）由 campus_common 的 pytest 插件提供。
 
-所有测试运行在冻结的时钟上（clock fixture，自动启用）：默认时刻 NOW 是 DAY 当天北京时间 06:00，
-此时 UTC 日期还是前一天，时区换算错误会直接暴露。需要其他时刻时用 clock.move_to(...)；
-JWT 在冻结的时钟下签发，移动时钟不能早于 NOW，也不要超过 token 有效期（8 小时）。
+所有测试运行在冻结的时钟上（插件的 clock fixture，pyproject 中 usefixtures 启用）：默认时刻
+campus_common.testing.NOW 是 DAY（周二）北京时间 06:00，此时 UTC 日期还是前一天，时区换算错误会直接暴露。
+需要其他时刻时用 clock.move_to(...)；JWT 在冻结的时钟下签发，移动时钟不能早于 NOW，
+也不要超过 token 有效期（8 小时）。
 """
-
-from datetime import date
 
 import pytest
 from app.config import settings
-from campus_common.testing import service_headers, user_headers
-from campus_common.timeutil import at_hour
+from campus_common.testing import NOW, service_headers, user_headers
 
-DAY = date(2026, 10, 20)  # 周二
-NOW = at_hour(DAY, 6)
+DAY = NOW.date()
 
 M2_KEY = "test-m2-key"
 M3_KEY = "test-m3-key"
 settings.service_keys = {"m2-room": M2_KEY, "m3-repair": M3_KEY}
-
-
-@pytest.fixture(autouse=True)
-def clock(time_machine):
-    time_machine.move_to(NOW, tick=False)
-    return time_machine
 
 
 @pytest.fixture

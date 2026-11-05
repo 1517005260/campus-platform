@@ -57,7 +57,7 @@ make migration svc=m1-seat rev=0002 msg="add seat tags"
 | 发消息 | `outbox.add_event()` + 消息模型 `events.*` | 业务事务里调用 |
 | 消费消息 | `consuming.create_broker()`、`subscribe()`、`create_consumer_app()`；`inbox.claim_message()` 去重；`retry.PermanentError/TransientError` | 处理函数 `handle_xxx(envelope)` |
 | 服务间写接口幂等（提供方） | `idempotency.run_idempotent()`（同键不同请求返回 409） | 业务动作（不自己提交事务） |
-| 测试 | 插件 fixture `client` `migrated` `db` `db_seed`；`testing.user_headers()` `service_headers()` `record_service_calls()` | 本模块的身份 fixture 与测试 |
+| 测试 | 插件 fixture `client` `migrated` `db` `db_seed` `clock`（冻结在 `testing.NOW`，全服务启用时在 pyproject 写 `usefixtures = ["clock"]`）；`testing.user_headers()` `service_headers()` `record_service_calls()` | 本模块的身份 fixture 与测试 |
 
 ## 架构约定
 
