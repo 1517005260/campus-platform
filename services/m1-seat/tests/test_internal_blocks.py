@@ -1,7 +1,7 @@
 """跨模块占用、释放和内部查询的行为测试。"""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from app.main import app
@@ -11,10 +11,9 @@ from campus_common.timeutil import at_hour
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from tests.conftest import M2_KEY, M3_KEY
+from tests.conftest import DAY, M2_KEY, M3_KEY
 
 pytestmark = pytest.mark.db
-DAY = date(2026, 10, 20)
 
 
 def _seed_room(db, *, seats: int = 2) -> tuple[Room, list[Seat]]:
@@ -76,6 +75,20 @@ def _count(db, model, *conditions) -> int:
     return db.scalar(select(func.count()).select_from(model).where(*conditions))
 
 
+def _payload(db, event_type: str, reservation_id: int) -> dict:
+    """某个预约对应的一条 outbox 消息的 payload。"""
+    payloads = [
+        row.envelope["payload"] for row in db.scalars(select(Outbox).where(Outbox.type == event_type))
+    ]
+    matched = [
+        p
+        for p in payloads
+        if p.get("reservation_id", p.get("params", {}).get("reservation_id")) == reservation_id
+    ]
+    assert len(matched) == 1, payloads
+    return matched[0]
+
+
 def test_create_block_cancels_overlapping_reservations_and_records_sources(client, db, as_m3):
     room, seats = _seed_room(db)
     overlapped = _reserve(db, room, seats[0], user_id=41, start_hour=9, end_hour=11)
@@ -117,6 +130,22 @@ def test_create_block_cancels_overlapping_reservations_and_records_sources(clien
     assert types.count("notification.send") == 2
     assert types.count("m1.reservation.cancelled") == 2
     assert types.count("audit.record") == 1
+    notification = _payload(db, "notification.send", overlapped.id)
+    assert notification["user_ids"] == [41]
+    assert notification["template"] == "seat.reservation_cancelled_by_block"
+    assert notification["params"] == {
+        "reservation_id": overlapped.id,
+        "start_at": "2026-10-20T09:00:00+08:00",
+        "end_at": "2026-10-20T11:00:00+08:00",
+        "block_source": "M3_MAINTENANCE",
+        "block_ref_id": 7,
+        "reason": "空调维修",
+    }
+    assert _payload(db, "m1.reservation.cancelled", overlapped.id) == {
+        "reservation_id": overlapped.id,
+        "user_id": 41,
+        "reason": "BLOCKED",
+    }
     audit = db.scalar(select(Outbox).where(Outbox.type == "audit.record"))
     assert audit.envelope["request_id"] == "req-block-create"
     assert audit.envelope["payload"]["actor_id"] == "m3-repair"
@@ -178,6 +207,107 @@ def test_same_source_reference_with_another_key_returns_existing_block(client, d
     assert first.status_code == second.status_code == 200
     assert second.json() == {"block_id": first.json()["block_id"], "cancelled_reservations": []}
     assert _count(db, RoomBlock) == 1
+
+
+def test_same_source_reference_with_different_request_is_rejected(client, db, as_m3):
+    room, _ = _seed_room(db)
+    body = _block_body(room)
+    assert client.post("/internal/v1/blocks", json=body, headers=as_m3).status_code == 200
+    other_key = service_headers("m3-repair", M3_KEY, idempotency_key="m3-order-7-block-v2")
+
+    response = client.post(
+        "/internal/v1/blocks",
+        json={**body, "end_at": at_hour(DAY, 13).isoformat()},
+        headers=other_key,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "BLOCK_REFERENCE_CONFLICT"
+    assert _count(db, RoomBlock) == 1
+
+
+def test_concurrent_requests_with_different_keys_create_one_block(db):
+    room, seat = _seed_room(db, seats=1)
+    reservation = _reserve(db, room, seat[0], user_id=41, start_hour=10, end_hour=11)
+    body = _block_body(room)
+
+    def send(key: str):
+        with TestClient(app) as concurrent_client:
+            return concurrent_client.post(
+                "/internal/v1/blocks", json=body, headers=service_headers("m3-repair", M3_KEY, key)
+            )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(pool.map(send, [f"m3-order-7-block-{i}" for i in range(4)]))
+
+    assert [response.status_code for response in responses] == [200] * 4
+    assert len({response.json()["block_id"] for response in responses}) == 1
+    cancelled = [response.json()["cancelled_reservations"] for response in responses]
+    assert sorted(len(rows) for rows in cancelled) == [0, 0, 0, 1]
+    assert _count(db, RoomBlock) == 1
+    assert _count(db, Outbox, Outbox.type == "m1.reservation.cancelled") == 1
+    db.expire_all()
+    assert db.get(Reservation, reservation.id).status == "cancelled"
+
+
+def test_reposting_released_block_follows_idempotency_then_lifecycle(client, db, as_m3):
+    """M3 的幂等键固定为 m3-order-{工单号}-block：同键重发是重放首次结果；只有换了键才会碰到已释放的单号。"""
+    room, (seat, _) = _seed_room(db)
+    earlier = _reserve(db, room, seat, user_id=40, start_hour=10, end_hour=11)
+    body = _block_body(room)
+    first = client.post("/internal/v1/blocks", json=body, headers=as_m3)
+    assert [row["id"] for row in first.json()["cancelled_reservations"]] == [earlier.id]
+    assert client.delete("/internal/v1/blocks/M3_MAINTENANCE/7", headers=as_m3).json() == {"released": True}
+    later = _reserve(db, room, seat, user_id=41, start_hour=10, end_hour=11)
+
+    replay = client.post("/internal/v1/blocks", json=body, headers=as_m3)
+    reused = client.post("/internal/v1/blocks", json={**body, "reason": "再次维修"}, headers=as_m3)
+    new_key = client.post(
+        "/internal/v1/blocks",
+        json=body,
+        headers=service_headers("m3-repair", M3_KEY, idempotency_key="m3-order-7-block-2"),
+    )
+
+    assert (replay.status_code, replay.json()) == (200, first.json())
+    assert (reused.status_code, reused.json()["code"]) == (409, "IDEMPOTENCY_KEY_REUSED")
+    assert (new_key.status_code, new_key.json()["code"]) == (409, "BLOCK_ALREADY_RELEASED")
+    db.expire_all()
+    assert db.get(Reservation, later.id).status == "booked"
+    assert db.scalar(select(RoomBlock.released_at)) is not None
+    assert _count(db, RoomBlock) == 1
+
+
+def test_m2_occupation_cancels_with_m2_reason(client, db):
+    room, (seat, _) = _seed_room(db)
+    reservation = _reserve(db, room, seat, user_id=41, start_hour=10, end_hour=11)
+    headers = service_headers("m2-room", M2_KEY, idempotency_key="m2-app-9-occupy")
+
+    response = client.post(
+        "/internal/v1/blocks", json=_block_body(room, source="M2_OCCUPY", ref_id=9), headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["cancelled_reservations"][0]["cancel_reason"] == "BLOCKED_BY_M2"
+    db.expire_all()
+    assert db.get(Reservation, reservation.id).cancel_reason == "BLOCKED_BY_M2"
+    assert (
+        _count(db, SeatStatusLog, SeatStatusLog.state == "blocked", SeatStatusLog.source == "M2_OCCUPY") == 2
+    )
+    assert _payload(db, "notification.send", reservation.id)["params"]["block_source"] == "M2_OCCUPY"
+
+
+def test_service_cannot_release_another_modules_block(client, db, as_m3):
+    room, _ = _seed_room(db)
+    assert client.post("/internal/v1/blocks", json=_block_body(room), headers=as_m3).status_code == 200
+
+    response = client.delete(
+        "/internal/v1/blocks/M3_MAINTENANCE/7", headers=service_headers("m2-room", M2_KEY)
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "BLOCK_SOURCE_FORBIDDEN"
+    db.expire_all()
+    assert db.scalar(select(RoomBlock.released_at)) is None
 
 
 def test_release_block_is_idempotent_and_writes_unblocked_logs(client, db, as_m3):
@@ -272,22 +402,42 @@ def test_internal_room_reservations_filters_active_and_overlapping(client, db, a
 
     assert response.status_code == 200
     assert [row["id"] for row in response.json()] == [booked.id, checked_in.id]
+    assert response.json()[0]["start_at"] == "2026-10-20T09:00:00+08:00"
 
 
-def test_internal_violation_count_since_date(client, db):
+def test_internal_room_reservations_rejects_reversed_range(client, db, as_m2):
+    room, _ = _seed_room(db)
+    response = client.get(
+        f"/internal/v1/rooms/{room.id}/reservations",
+        params={"start_at": at_hour(DAY, 12).isoformat(), "end_at": at_hour(DAY, 9).isoformat()},
+        headers=as_m2,
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+
+def test_internal_violation_count_includes_since_boundary(client, db):
     room, seat = _seed_room(db, seats=1)
-    old = _reserve(db, room, seat[0], user_id=42, start_hour=8, end_hour=9, status="no_show")
-    recent = _reserve(db, room, seat[0], user_id=42, start_hour=10, end_hour=11, status="no_show")
-    db.add(Violation(user_id=42, reservation_id=old.id, created_at=at_hour(DAY - timedelta(days=10), 12)))
-    db.add(Violation(user_id=42, reservation_id=recent.id, created_at=at_hour(DAY, 12)))
+    since = at_hour(DAY - timedelta(days=1), 0)
+    created = {
+        "before": since - timedelta(microseconds=1),
+        "at": since,
+        "after": at_hour(DAY, 12),
+        "other_user": at_hour(DAY, 12),
+    }
+    for hour, (name, created_at) in enumerate(created.items(), start=8):
+        user_id = 43 if name == "other_user" else 42
+        row = _reserve(
+            db, room, seat[0], user_id=user_id, start_hour=hour, end_hour=hour + 1, status="no_show"
+        )
+        db.add(Violation(user_id=user_id, reservation_id=row.id, created_at=created_at))
     db.commit()
-    headers = service_headers("m2-room", M2_KEY)
 
     response = client.get(
         "/internal/v1/users/42/violations",
-        params={"since": at_hour(DAY - timedelta(days=1), 0).isoformat()},
-        headers=headers,
+        params={"since": since.isoformat()},
+        headers=service_headers("m2-room", M2_KEY),
     )
 
     assert response.status_code == 200
-    assert response.json() == {"user_id": 42, "count": 1}
+    assert response.json() == {"user_id": 42, "count": 2}

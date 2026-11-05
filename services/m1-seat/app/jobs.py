@@ -9,16 +9,15 @@
 
 from datetime import datetime, timedelta
 
-from campus_common.events import NotificationSend, Ref, ReservationCancelled
+from campus_common.events import NotificationSend, Ref
 from campus_common.outbox import add_event
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models import Outbox, Reservation, SeatStatusLog, Violation
+from app.models import Outbox, Reservation, Violation
 from app.rules import load_rules
+from app.shared import PRODUCER, release_reservation
 
-PRODUCER = settings.service_name
 BATCH = 100
 
 
@@ -38,37 +37,8 @@ def mark_no_shows(session: Session, at: datetime) -> list[int]:
     ).all()
 
     for r in rows:
-        r.status = "no_show"
-        r.cancel_reason = "NO_CHECK_IN"
+        release_reservation(session, r, "NO_CHECK_IN", at=at, notify="seat.no_show_cancelled")
         session.add(Violation(user_id=r.user_id, reservation_id=r.id))
-        session.add(
-            SeatStatusLog(
-                seat_id=r.seat_id,
-                at=at,
-                state="released",
-                source="M1_RESERVATION",
-                ref_id=r.id,
-                start_at=r.start_at,
-                end_at=r.end_at,
-            )
-        )
-        add_event(
-            session,
-            Outbox,
-            PRODUCER,
-            NotificationSend(
-                user_ids=[r.user_id],
-                template="seat.no_show_cancelled",
-                params={"reservation_id": r.id, "start_at": r.start_at.isoformat()},
-                ref=Ref(module="m1", type="reservation", id=r.id),
-            ),
-        )
-        add_event(
-            session,
-            Outbox,
-            PRODUCER,
-            ReservationCancelled(reservation_id=r.id, user_id=r.user_id, reason="NO_SHOW"),
-        )
     return [r.id for r in rows]
 
 

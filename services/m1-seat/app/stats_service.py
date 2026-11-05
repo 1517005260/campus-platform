@@ -4,12 +4,13 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from campus_common.errors import AppError, not_found
-from campus_common.timeutil import BIZ_TZ, at_hour
-from sqlalchemy import select
+from campus_common.timeutil import at_hour, to_biz
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas as s
 from app.models import Reservation, Room, RoomBlock, RoomOpenHour, Seat
+from app.shared import overlaps
 
 UTILIZED_STATUSES = ("checked_in", "completed")
 CLOSED_STATUSES = ("no_show", "completed")
@@ -62,7 +63,7 @@ def _seconds_by_hour(intervals: list[tuple[datetime, datetime]]) -> dict[int, fl
     for start, end in intervals:
         cursor = start
         while cursor < end:
-            local_cursor = cursor.astimezone(BIZ_TZ)
+            local_cursor = to_biz(cursor)
             next_hour = at_hour(local_cursor.date(), local_cursor.hour + 1)
             segment_end = min(end, next_hour)
             totals[local_cursor.hour] += (segment_end - cursor).total_seconds()
@@ -98,16 +99,13 @@ def _open_intervals(
 
 
 def _block_intervals(
-    blocks: list[RoomBlock],
+    blocks: list[tuple[datetime, datetime | None]],
     range_start: datetime,
     range_end: datetime,
 ) -> list[tuple[datetime, datetime]]:
     intervals = []
-    for block in blocks:
-        effective_end = block.released_at or block.end_at or range_end
-        if block.end_at is not None:
-            effective_end = min(effective_end, block.end_at)
-        clipped = _clip(block.start_at, effective_end, range_start, range_end)
+    for start_at, effective_end in blocks:
+        clipped = _clip(start_at, effective_end or range_end, range_start, range_end)
         if clipped is not None:
             intervals.append(clipped)
     return _merge(intervals)
@@ -155,7 +153,6 @@ async def usage_stats(
             utilization=0.0, no_show_rate=0.0, by_room=[], by_hour={h: 0.0 for h in range(24)}
         )
 
-    hours_rows = (await session.scalars(select(RoomOpenHour).where(RoomOpenHour.room_id.in_(room_ids)))).all()
     seats_rows = (
         await session.scalars(select(Seat).where(Seat.room_id.in_(room_ids), Seat.status == "enabled"))
     ).all()
@@ -163,32 +160,31 @@ async def usage_stats(
         await session.scalars(
             select(Reservation).where(
                 Reservation.room_id.in_(room_ids),
-                Reservation.start_at < range_end,
-                Reservation.end_at > range_start,
+                overlaps(Reservation.start_at, Reservation.end_at, range_start, range_end),
             )
         )
     ).all()
+    # 占用在释放时刻或计划结束时刻（取较早者，都为空表示仍在占用）之前扣除开放时间；已释放的历史占用同样扣除
+    effective_end = func.least(RoomBlock.released_at, RoomBlock.end_at)
     blocks = (
-        await session.scalars(
-            select(RoomBlock).where(
+        await session.execute(
+            select(RoomBlock.room_id, RoomBlock.start_at, effective_end).where(
                 RoomBlock.room_id.in_(room_ids),
-                RoomBlock.start_at < range_end,
+                overlaps(RoomBlock.start_at, effective_end, range_start, range_end),
             )
         )
     ).all()
 
-    hours_by_room: dict[int, dict[int, RoomOpenHour]] = defaultdict(dict)
-    for row in hours_rows:
-        hours_by_room[row.room_id][row.weekday] = row
+    hours_by_room = {room.id: {row.weekday: row for row in room.open_hours} for room in rooms}
     seat_count = defaultdict(int)
     for seat in seats_rows:
         seat_count[seat.room_id] += 1
     reservations_by_room: dict[int, list[Reservation]] = defaultdict(list)
     for row in reservations:
         reservations_by_room[row.room_id].append(row)
-    blocks_by_room: dict[int, list[RoomBlock]] = defaultdict(list)
-    for row in blocks:
-        blocks_by_room[row.room_id].append(row)
+    blocks_by_room: dict[int, list[tuple[datetime, datetime | None]]] = defaultdict(list)
+    for block_room_id, start_at, end_at in blocks:
+        blocks_by_room[block_room_id].append((start_at, end_at))
 
     by_room: list[s.RoomUsage] = []
     total_utilized = 0.0

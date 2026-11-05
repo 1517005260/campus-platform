@@ -62,7 +62,9 @@ class ReservationCancelled(BaseModel):
     TYPE: ClassVar[str] = "m1.reservation.cancelled"
     reservation_id: int
     user_id: int
-    reason: Literal["USER", "NO_SHOW", "BLOCKED"]
+    reason: Literal["USER", "NO_SHOW", "BLOCKED", "ADMIN"] = Field(
+        description="USER 学生取消；NO_SHOW 未签到；BLOCKED 被 M2/M3 占用；ADMIN 座位或教室被管理员停用"
+    )
 
 
 class ApplicationStatusChanged(BaseModel):

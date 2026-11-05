@@ -130,10 +130,12 @@
   "m1.reservation.cancelled": {
     "properties": {
       "reason": {
+        "description": "USER 学生取消；NO_SHOW 未签到；BLOCKED 被 M2/M3 占用；ADMIN 座位或教室被管理员停用",
         "enum": [
           "USER",
           "NO_SHOW",
-          "BLOCKED"
+          "BLOCKED",
+          "ADMIN"
         ],
         "title": "Reason",
         "type": "string"

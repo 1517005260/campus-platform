@@ -20,8 +20,11 @@ async def create_reservation(
     session: SessionDep,
     user: Student = Depends(require_perm("seat:reserve")),
 ):
-    """校验：整点、时长不超过 max_hours、在开放时间内、院系准入、座位与本人时段均无冲突、
-    无 M2/M3 占用。冲突返回 409 SEAT_NOT_AVAILABLE / USER_TIME_CONFLICT。"""
+    """校验与座位搜索使用同一组规则。错误：
+    422 `VALIDATION_ERROR`（结束不晚于开始）；
+    400 `RESERVATION_IN_PAST`、`INVALID_DURATION`（超过 `max_hours`）、`OUTSIDE_OPEN_HOURS`；
+    404 `NOT_FOUND`（座位不存在）；403 `DEPT_RESTRICTED`；
+    409 `SEAT_NOT_AVAILABLE`（座位或教室停用、被预约、被 M2/M3 占用）、`USER_TIME_CONFLICT`。"""
     return await reservation_service.create_reservation(session, user, body.seat_id, body)
 
 
@@ -41,6 +44,8 @@ async def cancel_reservation(
     session: SessionDep,
     user: Student = Depends(require_perm("seat:reserve")),
 ):
+    """只能取消自己未开始的 booked 预约。不是本人的预约：404 `NOT_FOUND`；其他状态或已开始：
+    409 `RESERVATION_STATE_CONFLICT`。"""
     return await reservation_service.cancel_reservation(session, user, reservation_id)
 
 
@@ -56,6 +61,7 @@ async def rebook(
     session: SessionDep,
     user: Student = Depends(require_perm("seat:reserve")),
 ):
+    """为历史预约的同一座位预约新时段。历史预约不是本人的：404 `NOT_FOUND`；其余错误同"预约座位"。"""
     return await reservation_service.rebook(session, user, reservation_id, body)
 
 
@@ -66,7 +72,10 @@ async def check_in(
     session: SessionDep,
     user: Student = Depends(require_perm("seat:reserve")),
 ):
-    """签到窗口：开始前 15 分钟至开始后 auto_cancel_min 分钟。签到码错误返回 400 CHECKIN_CODE_INVALID。"""
+    """签到窗口：开始前 15 分钟至开始后 `auto_cancel_min` 分钟之前；签到码为教室屏幕当前显示的当天的码。
+
+    错误：404 `NOT_FOUND`（不是本人的预约）；409 `RESERVATION_STATE_CONFLICT`（不是 booked，包括已被取消）；
+    400 `CHECKIN_WINDOW_CLOSED`、`CHECKIN_CODE_INVALID`。"""
     return await checkin_service.check_in(session, user, reservation_id, body.code)
 
 

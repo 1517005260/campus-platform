@@ -2,7 +2,8 @@
 
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from campus_common.timeutil import TimeRangeModel
+from pydantic import AwareDatetime, BaseModel, Field
 
 ApplicationStatus = Literal["pending", "approved", "rejected", "withdrawn", "expired", "cancelled"]
 
@@ -19,18 +20,12 @@ class Eligibility(BaseModel):
     reasons: list[str] = Field(description="不满足的原因，例如 近 30 天违约 3 次")
 
 
-class ApplicationCreate(BaseModel):
+class ApplicationCreate(TimeRangeModel):
     room_id: int
     start_at: AwareDatetime
     end_at: AwareDatetime
     purpose: str = Field(min_length=2, max_length=500, examples=["班级读书会"])
     attendees: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def _order(self):
-        if self.end_at <= self.start_at:
-            raise ValueError("end_at 必须晚于 start_at")
-        return self
 
 
 class ApprovalRecordOut(BaseModel):

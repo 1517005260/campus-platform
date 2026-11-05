@@ -30,6 +30,7 @@ async def put_settings(
     session: SessionDep,
     user=Depends(require_perm("seat:config")),
 ):
+    """`remind_late_min` 必须小于 `auto_cancel_min`，否则 422 `VALIDATION_ERROR`。"""
     async with session.begin():
         await asave_params(session, Setting, body)
     return body
@@ -43,6 +44,9 @@ async def usage_stats(
     room_id: int | None = None,
     user=Depends(require_perm("seat:stats")),
 ):
+    """利用率与违约率口径见 ADR-012。
+
+    `date_to` 早于 `date_from`：400 `INVALID_DATE_RANGE`；教室不存在：404 `NOT_FOUND`。"""
     return await stats_service.usage_stats(
         session,
         date_from=date_from,
