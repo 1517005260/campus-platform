@@ -12,7 +12,7 @@ npm run lint && npm run typecheck && npm run build
 目录：
 
 ```
-src/core/      基础设施（登录、请求、路由合并、布局、权限、公共组件），B 维护
+src/core/      基础设施（登录、请求、路由合并、布局、权限、公共组件），前端负责人 C 维护
 src/modules/   业务模块，与后端服务同名：common / m1-seat / m2-room / m3-repair
 src/api/types/ 从 contracts/openapi 生成的类型，不要手改
 ```

@@ -1,7 +1,7 @@
 """种子数据入口。各服务的 app/seed.py 只写数据本身：
 
     def seed_base(session): ...          # 所有环境：权限码、系统参数默认值等
-    def seed_demo(session): ...          # 仅 SEED_DEMO=true：演示账号、演示教室等
+    def seed_demo(session): ...          # SEED_DEMO=true（默认）：演示账号、演示教室等
 
     if __name__ == "__main__":
         run_seed(settings, seed_base, seed_demo)

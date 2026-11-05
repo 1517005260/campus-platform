@@ -9,16 +9,15 @@
 
 from datetime import datetime, timedelta
 
-from campus_common.events import NotificationSend, Ref, ReservationCancelled
+from campus_common.events import NotificationSend, Ref
 from campus_common.outbox import add_event
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models import Outbox, Reservation, SeatStatusLog, Violation
+from app.models import Outbox, Reservation, Violation
 from app.rules import load_rules
+from app.shared import PRODUCER, release_reservation
 
-PRODUCER = settings.service_name
 BATCH = 100
 
 
@@ -38,50 +37,99 @@ def mark_no_shows(session: Session, at: datetime) -> list[int]:
     ).all()
 
     for r in rows:
-        r.status = "no_show"
-        r.cancel_reason = "NO_CHECK_IN"
+        release_reservation(session, r, "NO_CHECK_IN", at=at, notify="seat.no_show_cancelled")
         session.add(Violation(user_id=r.user_id, reservation_id=r.id))
-        session.add(
-            SeatStatusLog(
-                seat_id=r.seat_id,
-                at=at,
-                state="released",
-                source="M1_RESERVATION",
-                ref_id=r.id,
-                start_at=r.start_at,
-                end_at=r.end_at,
-            )
+    return [r.id for r in rows]
+
+
+def send_reminders_before(session: Session, at: datetime) -> list[int]:
+    """发送开始前提醒；每条约会只发送一次。"""
+    rules = load_rules(session)
+    latest = at + timedelta(minutes=rules.remind_before_min)
+    rows = session.scalars(
+        select(Reservation)
+        .where(
+            Reservation.status == "booked",
+            Reservation.reminded_before_at.is_(None),
+            Reservation.start_at <= latest,
+            Reservation.start_at > at,
         )
+        .order_by(Reservation.start_at)
+        .limit(BATCH)
+        .with_for_update(skip_locked=True)
+    ).all()
+
+    for r in rows:
+        r.reminded_before_at = at
         add_event(
             session,
             Outbox,
             PRODUCER,
             NotificationSend(
                 user_ids=[r.user_id],
-                template="seat.no_show_cancelled",
-                params={"reservation_id": r.id, "start_at": r.start_at.isoformat()},
+                template="seat.remind_before",
+                params={
+                    "reservation_id": r.id,
+                    "start_at": r.start_at.isoformat(),
+                    "end_at": r.end_at.isoformat(),
+                },
                 ref=Ref(module="m1", type="reservation", id=r.id),
             ),
-        )
-        add_event(
-            session,
-            Outbox,
-            PRODUCER,
-            ReservationCancelled(reservation_id=r.id, user_id=r.user_id, reason="NO_SHOW"),
         )
     return [r.id for r in rows]
 
 
-def send_reminders_before(session: Session, at: datetime) -> list[int]:
-    """待实现（REQ-M1-07）：开始前 remind_before_min 分钟提醒。用 reminded_before_at 标记，保证只提醒一次。"""
-    return []
-
-
 def send_reminders_late(session: Session, at: datetime) -> list[int]:
-    """待实现（REQ-M1-08）：开始后 remind_late_min 分钟仍未签到再提醒一次。用 reminded_late_at 标记。"""
-    return []
+    """发送未签到提醒；到达自动取消截止时间后不再发送。"""
+    rules = load_rules(session)
+    earliest = at - timedelta(minutes=rules.remind_late_min)
+    deadline = at - timedelta(minutes=rules.auto_cancel_min)
+    rows = session.scalars(
+        select(Reservation)
+        .where(
+            Reservation.status == "booked",
+            Reservation.reminded_late_at.is_(None),
+            Reservation.start_at <= earliest,
+            Reservation.start_at > deadline,
+        )
+        .order_by(Reservation.start_at)
+        .limit(BATCH)
+        .with_for_update(skip_locked=True)
+    ).all()
+
+    for r in rows:
+        r.reminded_late_at = at
+        add_event(
+            session,
+            Outbox,
+            PRODUCER,
+            NotificationSend(
+                user_ids=[r.user_id],
+                template="seat.remind_late",
+                params={
+                    "reservation_id": r.id,
+                    "start_at": r.start_at.isoformat(),
+                    "deadline_minutes": rules.auto_cancel_min,
+                },
+                ref=Ref(module="m1", type="reservation", id=r.id),
+            ),
+        )
+    return [r.id for r in rows]
 
 
 def complete_finished(session: Session, at: datetime) -> list[int]:
-    """待实现：已签到且 end_at 已过的预约标记为 completed。"""
-    return []
+    """把已经结束且完成签到的预约标记为 completed。"""
+    rows = session.scalars(
+        select(Reservation)
+        .where(
+            Reservation.status == "checked_in",
+            Reservation.end_at <= at,
+        )
+        .order_by(Reservation.end_at)
+        .limit(BATCH)
+        .with_for_update(skip_locked=True)
+    ).all()
+
+    for r in rows:
+        r.status = "completed"
+    return [r.id for r in rows]

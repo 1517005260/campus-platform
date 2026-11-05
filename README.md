@@ -10,14 +10,14 @@
 
 | 服务 | 目录 | 端口 | 负责人 | 职责 |
 |---|---|---|---|---|
-| common | `services/common` | 8004 | D（RBAC）、F（通知、审计） | 登录与 JWT 签发、用户/角色/权限/院系、站内通知与邮件、操作审计 |
-| M1 自习座位预约 | `services/m1-seat` | 8001 | A（后端）、B（前端、提醒、统计） | 空间与座位主数据、搜索、预约、签到、违约、提醒；**座位状态的唯一写入方** |
-| M2 整教室预约与审批 | `services/m2-room` | 8002 | C（申请、审批）、D（门槛、配置） | 资格门槛、申请、多级审批、超时撤销；审批通过后经 M1 占用教室 |
-| M3 物业报修工单 | `services/m3-repair` | 8003 | E（工单）、F（通知集成） | 上报、派单、维修中、超时升级、验收评价；维修中经 M1 下架教室 |
-| 前端 | `frontend` | 3000（开发） | B（core 与 M1 页面）、各模块组（各自页面） | Vue 3 单页应用，按模块分目录，见 [`docs/design/frontend.md`](docs/design/frontend.md) |
-| 网关 | `deploy/gateway` | 8000 | E | 唯一对外入口，按路径转发，不转发 `/internal` |
+| common | `services/common` | 8004 | `1517005260` | 登录与 JWT 签发、用户/角色/权限/院系、站内通知与邮件、操作审计 |
+| M1 自习座位预约 | `services/m1-seat` | 8001 | `cyuanb` | 空间与座位主数据、搜索、预约、签到、违约、提醒；**座位状态的唯一写入方** |
+| M2 整教室预约与审批 | `services/m2-room` | 8002 | A | 资格门槛、申请、多级审批、超时撤销；审批通过后经 M1 占用教室 |
+| M3 物业报修工单 | `services/m3-repair` | 8003 | B | 上报、派单、维修中、超时升级、验收评价；维修中经 M1 下架教室 |
+| 前端 | `frontend` | 3000（开发） | C | Vue 3 单页应用，按模块分目录，见 [`docs/design/frontend.md`](docs/design/frontend.md) |
+| 网关 | `deploy/gateway` | 8000 | E（运维） | 唯一对外入口，按路径转发，不转发 `/internal` |
 
-公共层 D 的归属：拆成独立的 common 服务，由 M2 组的 D 和 M3 组的 F 分别负责 RBAC 与通知审计；空间与座位主数据归 M1。理由与备选方案见 [ADR-001](docs/adr/001-公共层归属.md)。
+公共层 D 的归属：拆成独立的 common 服务（RBAC、通知、审计）并连同公共库 `libs/campus_common` 由专职负责人 `1517005260` 负责；空间与座位主数据归 M1。理由与备选方案见 [ADR-001](docs/adr/001-公共层归属.md)。负责人中的字母是尚未确认成员的占位，见 [`docs/process.md`](docs/process.md) 第 1 节。
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
 | 服务间调用 | 调用方只写业务语义，通信、桩数据（`STUB_CLIENTS`）、宽容读取由公共客户端完成；契约测试对照 `contracts/openapi` 校验 | `clients.m1.M1Client`、`clients.common.CommonClient` |
 | 定时任务 | 扫描函数 `fn(session, at)`，注册即调度，任务名 `<模块>.<函数名>` | `worker.ServiceWorker` |
 | 系统参数 | 有可调参数的服务（M1、M2、M3）各一张键值表，结构与默认值由参数模型定义 | `ParamMixin`、`params.*` |
-| 种子数据 | `seed_base`（所有环境）+ `seed_demo`（`SEED_DEMO=true`），幂等 | `seeding.run_seed()` |
+| 种子数据 | `seed_base`（所有环境）+ `seed_demo`（`SEED_DEMO=true`，默认开启），幂等 | `seeding.run_seed()` |
 | 测试 | 通用 fixture `client` / `migrated` / `db` / `db_seed`；只连接 `*_test` 库 | pytest 插件、`testing.*` |
 | 运维 | 每个服务提供 `GET /health`（存活）、`GET /ready`（数据库可用）、`GET /version`；网关映射为 `/ops/<服务>/<health\|ready\|version>` | `create_app()` |
 
@@ -158,7 +158,7 @@ common 消费者 → inbox 表按 message_id 去重（与业务写入同一事�
 - 每个服务一个 schema，Alembic 版本表也在各自 schema 里（`m1.alembic_version`），四个服务独立演进。
 - 迁移编号顺序递增（`0001`、`0002`…），用 `make migration svc=m1-seat rev=0002 msg="..."` 生成后人工审查。
 - 迁移遵循"先扩展后收缩"：新增列先可空或带默认值，删除旧列放到下一个版本。这样回滚到上一版镜像时，旧代码仍能在新 schema 上运行。
-- 种子数据在 `app/seed.py`，每次部署自动执行，必须幂等。基础数据（权限码、预置角色、系统参数）所有环境都写；演示数据（测试账号、演示教室）只在 `SEED_DEMO=true` 的环境写。
+- 种子数据在 `app/seed.py`，每次部署自动执行，必须幂等。基础数据（权限码、预置角色、系统参数）所有环境都写；演示数据（演示账号、院系、演示教室等）在 `SEED_DEMO=true` 时写，默认所有环境（含生产）都导入，存放真实数据前设为 `false` 关闭。
 - CI 对每个服务验证：空库一次重放到最新、模型与迁移一致（`alembic check`）、可回退再重放、种子连续执行两次结果不变。
 
 ## 7. 环境与部署
@@ -190,7 +190,7 @@ common 消费者 → inbox 表按 message_id 去重（与业务写入同一事�
 | 邮件 | 测试环境启用 `mailcatcher` profile，邮件进入 Mailpit（界面只绑定服务器本机，经 SSH 隧道查看）；生产环境填写 `SMTP_*` 接入真实 SMTP，`SMTP_HOST` 为空表示只发站内信 |
 | 回滚 | 迁移遵循"先扩展后收缩"；api 启动时若数据库版本比镜像新则跳过迁移并告警（`campus_common.migrate`），旧镜像直接在新 schema 上运行 |
 | 备份 | 每次部署前与每日 03:00（`server_init.sh` 安装的 cron）执行 `deploy/backup.sh`，`pg_dump` 写入部署目录的 `backups/`，保留最近 14 份；恢复命令见脚本注释 |
-| 初始账号 | 所有环境写入引导管理员 `admin`（密码 `ADMIN_PASSWORD`，默认 `campus123`），用于新环境登录后创建其他用户；开发与测试环境另有各角色的演示账号（`SEED_DEMO=true`，密码 `DEMO_PASSWORD`，默认 `campus123`），集成测试读取同一个值 |
+| 初始账号 | 所有环境写入引导管理员 `admin`（密码 `ADMIN_PASSWORD`，默认 `campus123`），用于新环境登录后创建其他用户；默认所有环境另有各角色的演示账号（`SEED_DEMO=true`，密码 `DEMO_PASSWORD`，默认 `campus123`；生产环境应在 secrets 中改掉），集成测试读取同一个值；演示账号的邮箱都是不可投递的 `@campus.local` |
 
 单服务器方案：测试环境使用 `deploy/env/test-single-server.env`（端口 +10000），compose 项目名不同（`campus-test` / `campus-prod`），数据卷互相隔离。
 
@@ -218,7 +218,7 @@ dev → main 的 PR（直接显示 dev 上同一提交的检查结果）── o
 
 部署通过 SSH 进行，服务器指纹来自 `DEPLOY_KNOWN_HOSTS` 密钥（事先核对），不在部署时临时信任。`v*` 标签只有仓库管理员（发布负责人）能创建，创建后任何人（包括管理员）都不能修改或删除；`retag_images.sh` 拒绝把已有版本标签改指到其他镜像（镜像仓库本身不提供标签不可变，这一点由流水线约定保证）；未配置生产审批人时生产部署直接失败，审批人不能审批自己触发的部署。test 环境只允许 main 使用。每周联调手动运行 `integration-test.yml`，它与部署共用并发组，不会和部署交错。Actions 按提交 SHA 固定。测试环境的配置文件由仓库变量 `TEST_ENV_FILE` 选择（默认 `test.env`，单服务器方案为 `test-single-server.env`），网关端口等全部取自该文件。每周一另有 `mutation.yml` 跑变异测试，报告测试漏掉的代码改动。
 
-协作者从 `dev` 开始开发，有写权限的人可直接提交 dev。`main` 只能通过 PR 更新，只有项目 owner `1517005260` 能合并（使用 merge commit），其他成员的批准不能替代；按约定只从本仓库 `dev` 发起，owner 合并前确认来源与 CI 结果。两条长期分支禁止删除和强推。仅同步分支规则可执行 `python3 scripts/configure_branches.py 1517005260/campus-platform`。
+协作者从 `dev` 开始开发，有写权限的人可直接提交 dev。`main` 只能通过 PR 更新，只有项目 owner `1517005260` 能合并（使用 merge commit），其他成员的批准不能替代；按约定只从本仓库 `dev` 发起，`ci-passed` 必须通过（owner 也不能绕过）。向 `dev` 的 PR 可由任一组员评审，用 rebase 或 squash 合并。两条长期分支禁止删除和强推。仅同步分支规则可执行 `python3 scripts/configure_branches.py 1517005260/campus-platform`。
 
 GitHub 侧配置（分支保护、版本标签保护、环境审批、生产部署引用、标签）全部由 [`scripts/github_setup.sh`](scripts/github_setup.sh) 完成，可重复执行；部署密钥由 [`scripts/gen_secrets.sh`](scripts/gen_secrets.sh) 生成（只补缺少的项）；服务器初始化由 [`deploy/server_init.sh`](deploy/server_init.sh) 完成。
 
@@ -240,7 +240,7 @@ make fe                    # 前端开发服务器 http://localhost:3000
 前端只依赖网关 8000。做前端时至少启动 common（登录）和自己模块的后端服务；其他服务的页面不打开就不需要启动。
 
 - 接口文档：`http://localhost:8001/docs`（M1），8002–8004 同理
-- 演示账号（密码 `campus123`）：`student`、`teacher`、`room_admin`、`ops_admin`、`dept_approver`、`school_approver`、`dispatcher`、`worker`、`screen`；系统管理员 `admin`（密码 `campus123`，所有环境都有）
+- 演示账号（密码 `campus123`）：`student`（计算与智能创新学院）、`student2`（数学科学学院）、`teacher`、`room_admin`、`ops_admin`、`dept_approver`、`school_approver`、`dispatcher`、`worker`、`screen`；自定义角色 `auditor`（审计员）、`user_manager`（账号管理员）；另有各院系的学生（学号形式的用户名）、教师、审批人和维修工共约 40 个账号，完整列表见 `services/common/app/seed.py`；系统管理员 `admin`（密码 `campus123`，所有环境都有）
 - 收到的邮件（Mailpit）：`http://localhost:8025`；RabbitMQ 管理界面：`http://localhost:15672`（campus / campus）
 - 默认 `STUB_CLIENTS=true`：服务间调用返回桩数据，不需要启动被调用方。联调时设为 `false`
 

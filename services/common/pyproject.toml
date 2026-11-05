@@ -31,8 +31,9 @@ markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-co
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/stubs.py"]
+# 异步会话经 greenlet 执行，不开启 greenlet 跟踪时 await 之后的代码都会被算作未覆盖
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
-# 桩阶段的起点；每完成一批真实实现就上调，第二次 Review 前达到 70
-fail_under = 50
+# 接口全部实现后的基线（实测约 98%）；只升不降
+fail_under = 90

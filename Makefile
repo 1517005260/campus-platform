@@ -45,8 +45,8 @@ mq-setup:         ## 声明消息拓扑并创建业务账号 campus_app（run / 
 	RABBITMQ_URL=$(DEV_MQ_ADMIN_URL) RABBITMQ_APP_USER=campus_app RABBITMQ_APP_PASSWORD=campus_app \
 		uv run --no-sync python -m campus_common.mqctl setup
 
-run: mq-setup     ## 本地运行某个服务（含迁移和演示种子）：make run svc=m1-seat
-	cd services/$(svc) && uv run --no-sync python -m campus_common.migrate && SEED_DEMO=true uv run --no-sync python -m app.seed \
+run: mq-setup     ## 本地运行某个服务（含迁移和种子，演示数据默认写入）：make run svc=m1-seat
+	cd services/$(svc) && uv run --no-sync python -m campus_common.migrate && uv run --no-sync python -m app.seed \
 		&& uv run --no-sync uvicorn app.main:app --reload --host $(DEV_BIND_HOST) --port $(PORT_$(svc))
 
 worker: mq-setup  ## 本地运行某个服务的 Celery worker：make worker svc=m1-seat

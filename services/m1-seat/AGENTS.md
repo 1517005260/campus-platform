@@ -10,16 +10,21 @@ M1 是座位状态的唯一写入方，也是 M2、M3 的被依赖方。`app/api
 
 - 预约接口接收 `date + start_hour + end_hour`，用 `campus_common.timeutil.at_hour()` 转成带时区时间再存库；`end_hour` 可以是 24。
 - 可调参数（`max_hours`、提醒和自动取消的分钟数）从 `app.rules.load_rules()` 读取（基于 `campus_common.params`），不要写死 4 或 15；接口里的参数读写用 `aload_params` / `asave_params`。
-- 座位可约 = 座位和教室 enabled + 在开放时间内 + 无有效预约（booked/checked_in）+ 无未释放且时段重叠的 `room_blocks`（`end_at` 为空视为无限期）。搜索、可用性、创建预约三处使用同一个判断函数，避免规则不一致。
+- 座位可约 = 座位和教室 enabled + 院系允许 + 在开放时间内 + 无有效预约（booked/checked_in）+ 无未释放且时段重叠的 `room_blocks`（`end_at` 为空视为无限期）。规则、时段重叠谓词、取消预约的动作都在 `app/shared.py`，搜索、可用性、创建预约、占用、停用只从这里取，不在别处重写。
+- 从带时区的时间取日期或整点先用 `campus_common.timeutil.to_biz()`。
+- PATCH 模型（`RoomUpdate`、`SeatUpdate`）的字段写成非 Optional 类型、默认 `None`：没传表示不修改，传 null 由 Pydantic 拒绝（422）；只有本身可空的字段（`dept_id`）写成 `X | None`。
+- 读取“当前用户自己的预约”用 `shared.own_reservation()`（他人的预约同样返回 404；状态迁移时 `for_update=True`）。
+- 停用座位或教室时取消其尚未结束的有效预约（`ADMIN_DISABLED`，不记违约，通知学生）。
 - 院系自习室（`rooms.dept_id` 非空）只对 JWT 中 `dept_id` 相同的用户可见可约。
-- 只有 no_show 记违约。用户取消、被 M2/M3 占用而取消都不记。
+- 只有 no_show 记违约。用户取消、被 M2/M3 占用而取消、因停用而取消都不记。
 - 每次座位状态变化写一条 `SeatStatusLog`，带 `source` 和 `ref_id`。
 
 ## 并发
 
-- 重叠预约由排除约束 `no_seat_overlap`、`no_user_overlap` 拒绝。捕获 `IntegrityError`，根据约束名返回 409 `SEAT_NOT_AVAILABLE` 或 `USER_TIME_CONFLICT`。
-- 创建预约和创建 block 都先 `SELECT ... FROM rooms WHERE id = :id FOR UPDATE`，让同一教室的这两类操作串行执行。
-- 状态迁移用带状态条件的更新（`WHERE id = :id AND status = 'booked'`），影响行数为 0 时返回 409 `RESERVATION_STATE_CONFLICT`。
+- 重叠预约由排除约束 `no_seat_overlap`、`no_user_overlap` 拒绝，用 `campus_common.db.constraint_errors()` 按约束名返回 409 `SEAT_NOT_AVAILABLE` 或 `USER_TIME_CONFLICT`。
+- 创建预约、创建 block、停用座位或教室都先锁教室行（`shared.lock_room()`），让同一教室的这些操作串行执行。
+- 同一单号的 block、同一天的签到码由唯一约束保证只有一份（`INSERT ... ON CONFLICT DO NOTHING` 后再读），不用咨询锁。
+- 接口里的状态迁移（取消、签到）先 `SELECT ... FROM reservations WHERE id = :id FOR UPDATE` 锁住预约，再检查状态，不允许时返回 409 `RESERVATION_STATE_CONFLICT`；定时扫描把状态条件写在 WHERE 里并用 `SKIP LOCKED`，被锁住的行本轮跳过，所以签到与未签到扫描只有一方生效。
 
 ## 跨模块接口的实现要点
 
@@ -37,4 +42,4 @@ M1 是座位状态的唯一写入方，也是 M2、M3 的被依赖方。`app/api
 
 ## 实现进度
 
-`stubs.py` 中的假数据随实现逐个替换。推荐顺序：`internal.py` 的 blocks（M2/M3 等它联调）→ 教室与座位 CRUD → 搜索与可用性 → 预约 → 签到 → 提醒 → 统计。
+M1 业务接口已全部使用真实实现，不再保留阶段 0 的桩数据。

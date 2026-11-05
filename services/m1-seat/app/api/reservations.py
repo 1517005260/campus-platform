@@ -1,12 +1,13 @@
 """个人预约、签到、违约记录。"""
 
 from campus_common.auth import CurrentUser, require_perm
+from campus_common.db import SessionDep
 from campus_common.errors import ERROR_RESPONSES
-from campus_common.pagination import Page, PageParams, page_of, page_params
+from campus_common.pagination import Page, PageParams, page_params
 from fastapi import APIRouter, Depends
 
+from app import checkin_service, reservation_service
 from app import schemas as s
-from app import stubs
 
 router = APIRouter(prefix="/api/v1/seat", tags=["预约与签到"], responses=ERROR_RESPONSES)
 
@@ -15,25 +16,37 @@ Student = CurrentUser
 
 @router.post("/reservations", summary="预约座位", response_model=s.Reservation, status_code=201)
 async def create_reservation(
-    body: s.ReservationCreate, user: Student = Depends(require_perm("seat:reserve"))
+    body: s.ReservationCreate,
+    session: SessionDep,
+    user: Student = Depends(require_perm("seat:reserve")),
 ):
-    """校验：整点、时长不超过 max_hours、在开放时间内、院系准入、座位与本人时段均无冲突、
-    无 M2/M3 占用。冲突返回 409 SEAT_NOT_AVAILABLE / USER_TIME_CONFLICT。"""
-    return stubs.reservation(user.id)
+    """校验与座位搜索使用同一组规则。错误：
+    422 `VALIDATION_ERROR`（结束不晚于开始）；
+    400 `RESERVATION_IN_PAST`、`INVALID_DURATION`（超过 `max_hours`）、`OUTSIDE_OPEN_HOURS`；
+    404 `NOT_FOUND`（座位不存在）；403 `DEPT_RESTRICTED`；
+    409 `SEAT_NOT_AVAILABLE`（座位或教室停用、被预约、被 M2/M3 占用）、`USER_TIME_CONFLICT`。"""
+    return await reservation_service.create_reservation(session, user, body.seat_id, body)
 
 
 @router.get("/reservations/mine", summary="我的预约历史", response_model=Page[s.ReservationDetail])
 async def my_reservations(
+    session: SessionDep,
     status: s.ReservationStatus | None = None,
     user: Student = Depends(require_perm("seat:reserve")),
     p: PageParams = Depends(page_params),
 ):
-    return page_of([stubs.reservation_detail(user.id)], 1, p)
+    return await reservation_service.my_reservations(session, user, status=status, params=p)
 
 
 @router.post("/reservations/{reservation_id}/cancel", summary="取消预约", response_model=s.Reservation)
-async def cancel_reservation(reservation_id: int, user: Student = Depends(require_perm("seat:reserve"))):
-    return stubs.reservation(user.id, reservation_id, status="cancelled")
+async def cancel_reservation(
+    reservation_id: int,
+    session: SessionDep,
+    user: Student = Depends(require_perm("seat:reserve")),
+):
+    """只能取消自己未开始的 booked 预约。不是本人的预约：404 `NOT_FOUND`；其他状态或已开始：
+    409 `RESERVATION_STATE_CONFLICT`。"""
+    return await reservation_service.cancel_reservation(session, user, reservation_id)
 
 
 @router.post(
@@ -43,21 +56,33 @@ async def cancel_reservation(reservation_id: int, user: Student = Depends(requir
     status_code=201,
 )
 async def rebook(
-    reservation_id: int, body: s.HourRange, user: Student = Depends(require_perm("seat:reserve"))
+    reservation_id: int,
+    body: s.HourRange,
+    session: SessionDep,
+    user: Student = Depends(require_perm("seat:reserve")),
 ):
-    return stubs.reservation(user.id, reservation_id + 1)
+    """为历史预约的同一座位预约新时段。历史预约不是本人的：404 `NOT_FOUND`；其余错误同"预约座位"。"""
+    return await reservation_service.rebook(session, user, reservation_id, body)
 
 
 @router.post("/reservations/{reservation_id}/check-in", summary="签到", response_model=s.Reservation)
 async def check_in(
-    reservation_id: int, body: s.CheckInRequest, user: Student = Depends(require_perm("seat:reserve"))
+    reservation_id: int,
+    body: s.CheckInRequest,
+    session: SessionDep,
+    user: Student = Depends(require_perm("seat:reserve")),
 ):
-    """签到窗口：开始前 15 分钟至开始后 auto_cancel_min 分钟。签到码错误返回 400 CHECKIN_CODE_INVALID。"""
-    return stubs.reservation(user.id, reservation_id, status="checked_in")
+    """签到窗口：开始前 15 分钟至开始后 `auto_cancel_min` 分钟之前；签到码为教室屏幕当前显示的当天的码。
+
+    错误：404 `NOT_FOUND`（不是本人的预约）；409 `RESERVATION_STATE_CONFLICT`（不是 booked，包括已被取消）；
+    400 `CHECKIN_WINDOW_CLOSED`、`CHECKIN_CODE_INVALID`。"""
+    return await checkin_service.check_in(session, user, reservation_id, body.code)
 
 
 @router.get("/violations/mine", summary="我的违约记录", response_model=Page[s.ViolationOut])
 async def my_violations(
-    user: Student = Depends(require_perm("seat:reserve")), p: PageParams = Depends(page_params)
+    session: SessionDep,
+    user: Student = Depends(require_perm("seat:reserve")),
+    p: PageParams = Depends(page_params),
 ):
-    return page_of([], 0, p)
+    return await reservation_service.my_violations(session, user, p)

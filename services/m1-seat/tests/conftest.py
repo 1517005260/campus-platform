@@ -1,20 +1,61 @@
 """M1 测试的特有 fixture。
 
 通用 fixture（client、migrated、db、db_seed）由 campus_common 的 pytest 插件提供。
+
+所有测试运行在冻结的时钟上（clock fixture，自动启用）：默认时刻 NOW 是 DAY 当天北京时间 06:00，
+此时 UTC 日期还是前一天，时区换算错误会直接暴露。需要其他时刻时用 clock.move_to(...)；
+JWT 在冻结的时钟下签发，移动时钟不能早于 NOW，也不要超过 token 有效期（8 小时）。
 """
+
+from datetime import date
 
 import pytest
 from app.config import settings
 from campus_common.testing import service_headers, user_headers
+from campus_common.timeutil import at_hour
+
+DAY = date(2026, 10, 20)  # 周二
+NOW = at_hour(DAY, 6)
 
 M2_KEY = "test-m2-key"
 M3_KEY = "test-m3-key"
 settings.service_keys = {"m2-room": M2_KEY, "m3-repair": M3_KEY}
 
 
+@pytest.fixture(autouse=True)
+def clock(time_machine):
+    time_machine.move_to(NOW, tick=False)
+    return time_machine
+
+
 @pytest.fixture
 def as_student():
     return user_headers(settings, perms=["seat:reserve"])
+
+
+@pytest.fixture
+def as_m2():
+    return service_headers("m2-room", M2_KEY, idempotency_key="m2-app-7-occupy")
+
+
+@pytest.fixture
+def as_room_admin():
+    return user_headers(settings, perms=["seat:room_manage"], dept_id=1)
+
+
+@pytest.fixture
+def as_screen():
+    return user_headers(settings, perms=["seat:checkin_code"], dept_id=1)
+
+
+@pytest.fixture
+def as_config():
+    return user_headers(settings, perms=["seat:config"], dept_id=1)
+
+
+@pytest.fixture
+def as_stats():
+    return user_headers(settings, perms=["seat:stats"], dept_id=1)
 
 
 @pytest.fixture

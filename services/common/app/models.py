@@ -94,6 +94,9 @@ class Notification(Base):
     ref: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     channels: Mapped[list[str]] = mapped_column(JSONB)
     email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 发送这封邮件失败的次数（只计本条邮件自身的错误，不计 SMTP 服务器不可用）与最近一次的错误
+    email_attempts: Mapped[int] = mapped_column(Integer, server_default="0", default=0)
+    email_last_error: Mapped[str | None] = mapped_column(String(200))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

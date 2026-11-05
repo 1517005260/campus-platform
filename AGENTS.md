@@ -41,15 +41,15 @@ make migration svc=m1-seat rev=0002 msg="add seat tags"
 
 ## 公共函数优先
 
-模块之间的共性能力全部由公共库 `libs/campus_common` 提供，服务里只写业务本身。下表中的事情不要在服务里重新实现；公共库缺少某项能力时，先在 PR 或 issue 里提出加入公共库（D、F 评审），不要在某个模块里先写一份。
+模块之间的共性能力全部由公共库 `libs/campus_common` 提供，服务里只写业务本身。下表中的事情不要在服务里重新实现；公共库缺少某项能力时，先在 PR 或 issue 里提出加入公共库（由 common 负责人 `1517005260` 评审），不要在某个模块里先写一份。
 
 | 要做的事 | 用这个 | 服务里写什么 |
 |---|---|---|
 | 创建应用、错误格式、`/health` `/ready` `/version` | `app_factory.create_app()` | `app/main.py` 只列路由 |
-| 数据库模型与会话 | `db.make_metadata(settings.db_schema)`、`db.SessionDep`；`infra_models` 的 `TimestampMixin`、`OutboxMixin`、`InboxMixin`、`IdempotencyKeyMixin`、`ParamMixin` | 本服务的业务表 |
+| 数据库模型与会话 | `db.make_metadata(settings.db_schema)`、`db.SessionDep`（会话时区为业务时区）；`db.constraint_errors()` 把违反约束转成错误码；`infra_models` 的 `TimestampMixin`、`OutboxMixin`、`InboxMixin`、`IdempotencyKeyMixin`、`ParamMixin` | 本服务的业务表 |
 | 迁移 | `migrations.run_migrations()`（`migrations/env.py`）；启动时 `python -m campus_common.migrate` | 迁移脚本 |
 | 鉴权 | `auth.require_perm()`、`require_service()`、`CurrentUserDep` | 权限码 |
-| 错误、分页、时间 | `errors.AppError`、`errors.not_found()`、`pagination.Page` / `page_params` / `page_of()`、`timeutil.now()/at_hour()` | 错误码 |
+| 错误、分页、时间 | `errors.AppError`、`errors.not_found()`、`query.query_model()`（模型作为查询参数）、`pagination.Page` / `page_params` / `page_of()` / `paginate()`、`timeutil.now()/at_hour()/to_biz()`、`timeutil.TimeRangeModel`（end_at 晚于 start_at 的校验基类） | 错误码 |
 | 定时任务 | `worker.ServiceWorker`：`worker.scan(jobs.xxx, every=60)` | `app/jobs.py` 中的 `fn(session, at)` |
 | 种子数据 | `seeding.run_seed()`、`reset_sequences()` | `app/seed.py` 中的 `seed_base` / `seed_demo` |
 | 可调系统参数 | `infra_models.ParamMixin` + `params.load_params()` / `aload_params()` / `asave_params()` / `seed_params()` | 参数模型（字段与默认值） |
@@ -113,6 +113,6 @@ make migration svc=m1-seat rev=0002 msg="add seat tags"
 - **留在任务范围内。** 不修改其他服务的目录、公共库和流水线配置，除非任务明确要求；需要改时说明原因，由人决定。
 - **交付时说明验证情况。** 完成后简要报告：改了哪些文件、怎样验证的（运行了哪些测试、改坏了什么来确认测试有效）、还有什么没做或拿不准。
 
-协作者从 `dev` 开始开发，有写权限的人可以直接向 `dev` 提交，也可以先开功能分支再向 `dev` 发 PR。`main` 只能通过 PR 更新，任何人都可以发起（约定只从本仓库 `dev` 发起），只有项目 owner `1517005260` 能合并，其他成员的批准不能替代。owner 合并前确认 PR 来源和 CI 结果。禁止直接推送、强推或删除 `main`。`dev → main` 使用 merge commit，保留长期分支的祖先关系。
+协作者从 `dev` 开始开发，有写权限的人可以直接向 `dev` 提交，也可以先开功能分支再向 `dev` 发 PR。`main` 只能通过 PR 更新，任何人都可以发起（约定只从本仓库 `dev` 发起），只有项目 owner `1517005260` 能合并，其他成员的批准不能替代。合并前 dev 上该提交的 CI（`ci-passed`）必须通过，owner 也不能绕过；PR 来源由 owner 确认。禁止直接推送、强推或删除 `main`。向 `dev` 的 PR 可由任一组员评审合并，用 rebase（保留作者的每个提交）或 squash；`dev → main` 使用 merge commit，保留长期分支的祖先关系。
 
 提交和合并由人完成：人审查改动后提交，提交信息格式为 `<类型>(<范围>): <说明> [<需求编号>]`，例如 `feat(m1): 限制单次预约最多 4 小时 [REQ-M1-03]`。合并冲突由人解决。

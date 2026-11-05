@@ -26,7 +26,7 @@ x-base-env: &base-env
 
 x-api-env: &api-env # 仅 api：校验用户 token、写种子数据
   JWT_SECRET: ${JWT_SECRET:?缺少 JWT_SECRET}
-  SEED_DEMO: ${SEED_DEMO:-false}
+  SEED_DEMO: ${SEED_DEMO:-true} # 默认导入演示数据（所有环境）；设为 false 关闭
   DEMO_PASSWORD: ${DEMO_PASSWORD:?缺少 DEMO_PASSWORD} # 演示账号密码（SEED_DEMO=true 时使用），默认值见 .env.example
 
 x-common-db: &common-db

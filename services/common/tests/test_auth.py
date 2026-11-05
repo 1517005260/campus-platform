@@ -7,13 +7,9 @@ from campus_common.auth import decode_token
 from campus_common.testing import service_headers
 from sqlalchemy import update
 
-from tests.conftest import M2_KEY
+from tests.conftest import M2_KEY, login
 
 pytestmark = pytest.mark.db
-
-
-def login(client, username, password="campus123"):
-    return client.post("/api/v1/auth/login", json={"username": username, "password": password})
 
 
 def test_login_returns_token_with_role_permissions(client, db):
@@ -48,8 +44,12 @@ def test_users_with_perm_filters_by_dept(client, db):
     headers = service_headers("m2-room", M2_KEY)
     all_approvers = client.get("/internal/v1/users?perm=room:approve", headers=headers).json()
     dept1 = client.get("/internal/v1/users?perm=room:approve&dept_id=1", headers=headers).json()
-    assert {u["username"] for u in all_approvers} == {"dept_approver", "school_approver", "admin"}
+    dept2 = client.get("/internal/v1/users?perm=room:approve&dept_id=2", headers=headers).json()
+    names = {u["username"] for u in all_approvers}
+    assert {"dept_approver", "approver_math", "school_approver", "admin"} <= names
+    assert "student" not in names and "teacher" not in names
     assert [u["username"] for u in dept1] == ["dept_approver"]
+    assert [u["username"] for u in dept2] == ["approver_math"]
 
 
 def test_disabled_user_cannot_log_in(client, db):

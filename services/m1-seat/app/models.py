@@ -25,7 +25,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.config import settings
 
@@ -48,6 +48,12 @@ class Room(TimestampMixin, Base):
     is_study_room: Mapped[bool] = mapped_column(Boolean, default=True)
     is_whole_bookable: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="enabled")  # enabled | disabled
+
+    # 开放时间随教室一起加载（接口返回 Room 时总是带 open_hours）；座位只在需要时显式加载
+    open_hours: Mapped[list["RoomOpenHour"]] = relationship(
+        order_by="RoomOpenHour.weekday", lazy="selectin", viewonly=True
+    )
+    seats: Mapped[list["Seat"]] = relationship(order_by="[Seat.code, Seat.id]", lazy="raise", viewonly=True)
 
 
 class RoomOpenHour(Base):
@@ -76,7 +82,9 @@ class Seat(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="enabled")
 
 
-ACTIVE_RESERVATION = text("status IN ('booked', 'checked_in')")
+# 有效预约：占用座位、参与冲突判断的状态
+ACTIVE_STATUSES = ("booked", "checked_in")
+ACTIVE_RESERVATION = text(f"status IN {ACTIVE_STATUSES!r}")
 
 
 class Reservation(TimestampMixin, Base):
@@ -110,11 +118,14 @@ class Reservation(TimestampMixin, Base):
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # booked | checked_in | completed | cancelled | no_show
     status: Mapped[str] = mapped_column(String(20), default="booked")
-    # USER | NO_CHECK_IN | BLOCKED_BY_M2 | BLOCKED_BY_M3
+    # USER | NO_CHECK_IN | BLOCKED_BY_M2 | BLOCKED_BY_M3 | ADMIN_DISABLED
     cancel_reason: Mapped[str | None] = mapped_column(String(30))
     checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reminded_before_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reminded_late_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    seat: Mapped[Seat] = relationship(lazy="raise", viewonly=True)
+    room: Mapped[Room] = relationship(lazy="raise", viewonly=True)
 
 
 class RoomBlock(Base):
