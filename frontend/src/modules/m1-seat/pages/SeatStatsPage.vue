@@ -2,18 +2,13 @@
 /** 运营统计：利用率、违约率总览，各整点平均利用率与各自习室明细。 */
 import { computed, onMounted, ref } from "vue";
 
+import { addDays, bizNow } from "@/core/format";
 import { showError } from "@/core/http";
 
 import { seatApi, type Room, type UsageStats } from "../api";
 
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-const dateFrom = ref(isoDaysAgo(6));
-const dateTo = ref(isoDaysAgo(0));
+const dateFrom = ref(addDays(bizNow().date, -6));
+const dateTo = ref(bizNow().date);
 const rooms = ref<Room[]>([]);
 const roomId = ref<number>();
 const stats = ref<UsageStats | null>(null);

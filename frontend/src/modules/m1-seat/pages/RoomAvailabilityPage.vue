@@ -5,13 +5,14 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 
+import { bizNow } from "@/core/format";
 import { showError } from "@/core/http";
 
 import { seatApi, type RoomDetail, type SeatAvailability } from "../api";
 
 const rooms = ref<{ id: number; label: string }[]>([]);
 const roomId = ref<number>();
-const date = ref(new Date().toISOString().slice(0, 10));
+const date = ref(bizNow().date);
 const detail = ref<RoomDetail | null>(null);
 const availability = ref<SeatAvailability[]>([]);
 const loading = ref(false);
@@ -20,7 +21,8 @@ const stateLabel: Record<string, string> = { free: "空闲", reserved: "已约",
 
 /** 展示的整点列：该教室当天开放时间内的整点；没有开放时间时默认 8–22 */
 const hours = computed(() => {
-  const weekday = (new Date(`${date.value}T00:00:00`).getDay() + 6) % 7; // 0 = 周一
+  // 纯日期按 UTC 解析再取星期，避免浏览器时区把日期挪一天
+  const weekday = (new Date(`${date.value}T00:00:00Z`).getUTCDay() + 6) % 7; // 0 = 周一
   const today = (detail.value?.open_hours ?? []).filter((h) => h.weekday === weekday);
   if (today.length === 0) return Array.from({ length: 14 }, (_, i) => i + 8);
   const open = Math.min(...today.map((h) => h.open_hour));

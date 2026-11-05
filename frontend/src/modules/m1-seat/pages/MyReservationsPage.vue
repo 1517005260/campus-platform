@@ -8,7 +8,7 @@ import { onMounted, ref, watch } from "vue";
 
 import HourRangePicker, { type HourRange } from "@/core/components/HourRangePicker.vue";
 import PaginatedTable from "@/core/components/PaginatedTable.vue";
-import { fmtTime } from "@/core/format";
+import { bizNow, fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 
 import { seatApi, type ReservationDetail, type Violation } from "../api";
@@ -77,7 +77,7 @@ async function checkIn(r: ReservationDetail) {
 
 /** ---- 一键复订 ---- */
 const rebooking = ref<ReservationDetail | null>(null);
-const rebookRange = ref<HourRange>({ date: new Date().toISOString().slice(0, 10), start_hour: 14, end_hour: 16 });
+const rebookRange = ref<HourRange>({ date: bizNow().date, start_hour: 14, end_hour: 16 });
 const rebookMaxHours = ref(4);
 
 async function openRebook(r: ReservationDetail) {

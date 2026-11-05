@@ -7,6 +7,7 @@ import { ElMessage } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 
+import { bizIso, bizNow } from "@/core/format";
 import { showError } from "@/core/http";
 
 import { roomApi, seatRoomsApi, type Eligibility } from "../api";
@@ -23,18 +24,16 @@ const submitting = ref(false);
 
 const form = reactive({
   room_id: undefined as number | undefined,
-  date: new Date().toISOString().slice(0, 10),
+  date: bizNow().date,
   start_hour: 18,
   end_hour: 20,
   purpose: "",
   attendees: 10,
 });
 
-/** 提交的起止时间（带本地时区偏移的 ISO 串） */
-const startAt = computed(() =>
-  new Date(`${form.date}T${String(form.start_hour).padStart(2, "0")}:00:00`).toISOString(),
-);
-const endAt = computed(() => new Date(`${form.date}T${String(form.end_hour).padStart(2, "0")}:00:00`).toISOString());
+/** 提交的起止时间：业务时区墙上时间 + 08:00 */
+const startAt = computed(() => bizIso(`${form.date}T${String(form.start_hour).padStart(2, "0")}:00:00`));
+const endAt = computed(() => bizIso(`${form.date}T${String(form.end_hour).padStart(2, "0")}:00:00`));
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 

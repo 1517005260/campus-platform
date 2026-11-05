@@ -7,7 +7,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { onMounted, reactive, ref, watch } from "vue";
 
 import PaginatedTable from "@/core/components/PaginatedTable.vue";
-import { fmtTime } from "@/core/format";
+import { bizIso, fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 import { useAuthStore } from "@/core/auth/store";
 
@@ -46,10 +46,31 @@ const statusOptions = Object.entries(orderStatusLabel).map(([value, label]) => (
 
 /** ---- 派单 ---- */
 const dispatching = ref<WorkOrder | null>(null);
+
+/** 业务时区的墙上时间（YYYY-MM-DDTHH:mm:ss），加指定小时后；作为选择器的值 */
+function wallTimeLater(hours: number): string {
+  const at = new Date(Date.now() + hours * 3600 * 1000);
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+}
+
 const dispatchForm = reactive({
   assignee_id: undefined as number | undefined,
   blocks_room: false,
-  deadline: new Date(Date.now() + 24 * 3600 * 1000),
+  deadline: wallTimeLater(24),
 });
 const dispatchSubmitting = ref(false);
 
@@ -57,7 +78,7 @@ function openDispatch(o: WorkOrder) {
   dispatching.value = o;
   dispatchForm.assignee_id = undefined;
   dispatchForm.blocks_room = false;
-  dispatchForm.deadline = new Date(Date.now() + 24 * 3600 * 1000);
+  dispatchForm.deadline = wallTimeLater(24);
 }
 
 async function dispatch() {
@@ -72,7 +93,7 @@ async function dispatch() {
       body: {
         assignee_id: dispatchForm.assignee_id,
         blocks_room: dispatchForm.blocks_room,
-        deadline_at: dispatchForm.deadline.toISOString(),
+        deadline_at: bizIso(dispatchForm.deadline),
       },
     });
     ElMessage.success("已派单");
@@ -225,7 +246,7 @@ onMounted(load);
         <span class="hint">拥有维修权限的用户编号</span>
       </el-form-item>
       <el-form-item label="处理截止" required>
-        <el-date-picker v-model="dispatchForm.deadline" type="datetime" />
+        <el-date-picker v-model="dispatchForm.deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" />
       </el-form-item>
       <el-form-item label="下架教室">
         <el-switch v-model="dispatchForm.blocks_room" />
