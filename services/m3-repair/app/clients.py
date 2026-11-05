@@ -34,6 +34,11 @@ async def release_room(order_id: int) -> bool:
     return await m1.release_block("M3_MAINTENANCE", order_id)
 
 
+async def get_user(user_id: int) -> UserBrief:
+    contact = await common.get_user(user_id)
+    return UserBrief(id=contact.id, username=contact.username, name=contact.name, dept_id=contact.dept_id)
+
+
 async def users_with_perm(perm: str) -> list[UserBrief]:
     """维修工（repair:work）或升级通知对象（repair:manage）。"""
     return await common.users_with_perm(perm)
