@@ -15,9 +15,11 @@
 src/
 ├── core/
 │   ├── http.ts            createApi<paths>()：带 token、统一错误、401 处理
+│   ├── commonApi.ts       common 服务的唯一客户端（登录、通知铃铛与 common 模块页面共用）
+│   ├── format.ts          时间按业务时区（Asia/Shanghai）显示与提交：fmtTime、bizIso、bizNow
 │   ├── auth/              登录页、pinia store（token、用户、can(perm)）
 │   ├── router.ts          合并各模块路由；登录与权限守卫
-│   ├── layout/            侧边菜单（按权限过滤）、顶栏、首页（服务版本）
+│   ├── layout/            侧边菜单（按权限过滤）、顶栏（含通知铃铛）、首页（服务版本）
 │   ├── components/        HourRangePicker 等公共组件
 │   └── module.ts          AppModule 类型
 ├── modules/
@@ -72,8 +74,8 @@ const { data } = await seatApi.GET("/api/v1/seat/seats/search", { params: { quer
 
 | 模块 | 已有 | 后续（负责人） |
 |---|---|---|
-| core | 登录、布局、首页、整点时段组件 | 站内通知铃铛、分页表格组件（C） |
+| core | 登录、布局、首页、整点时段组件、顶栏站内通知铃铛（未读数，`core/notifications.ts`） | 分页表格组件（C） |
 | m1-seat | 搜索座位并预约、我的预约（取消、签到） | 自习室可用性格子图、历史复用、教室管理、签到屏页面、统计（C） |
 | m2-room | 我的申请（含资格提示）、待我审批 | 提交申请表单、申请详情与审批记录、审批流配置（C） |
 | m3-repair | 上报故障、我的报修、工单看板 | 派单、开始/完工、验收评价、工单详情时间线、配置（C） |
-| common | 角色与权限码查看 | 用户管理、新建角色、审计查询、站内通知列表（C） |
+| common | 用户管理（查询、新建、编辑、停用/启用、设置角色）、角色与权限（新建、编辑权限、删除自定义角色）、院系（新建、改名）、操作审计（筛选查询）、我的通知（已读、全部已读） | |

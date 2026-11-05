@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { authApi } from "@/core/auth/api";
+import { commonApi } from "@/core/commonApi";
 import { useAuthStore } from "@/core/auth/store";
 import { showError } from "@/core/http";
 
@@ -15,7 +15,7 @@ const loading = ref(false);
 async function submit() {
   loading.value = true;
   try {
-    const { data } = await authApi.POST("/api/v1/auth/login", { body: form.value });
+    const { data } = await commonApi.POST("/api/v1/auth/login", { body: form.value });
     auth.login(data!.access_token, data!.user);
     router.replace((route.query.redirect as string) || "/");
   } catch (e) {

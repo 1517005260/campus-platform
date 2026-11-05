@@ -1,7 +1,7 @@
 """跨模块集成测试：对部署好的环境（经网关）发真实 HTTP 请求。
 
 由流水线在每次测试环境部署后运行：scripts/integration_test.sh <网关地址> [期望版本]
-依赖测试环境的演示账号（SEED_DEMO=true），密码默认 campus123。
+依赖演示账号（SEED_DEMO=true，默认开启），密码默认 campus123。
 """
 
 import os

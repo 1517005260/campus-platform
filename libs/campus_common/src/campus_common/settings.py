@@ -35,8 +35,8 @@ class ServiceSettings(BaseSettings):
     m1_url: str = "http://localhost:8001"
     common_url: str = "http://localhost:8004"
 
-    # 种子数据：基础数据所有环境都写；演示数据只在 seed_demo 为真时写（开发、测试环境）
-    seed_demo: bool = False
+    # 种子数据：基础数据所有环境都写；演示数据在 seed_demo 为真时写，默认所有环境都导入，设为 false 关闭
+    seed_demo: bool = True
     demo_password: str = "campus123"
 
     app_version: str = "dev"

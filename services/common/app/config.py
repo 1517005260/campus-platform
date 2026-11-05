@@ -17,6 +17,8 @@ class Settings(ServiceSettings):
     smtp_password: str = ""
     smtp_security: Literal["none", "starttls", "ssl"] = "none"
     mail_from: str = "noreply@campus.local"
+    # 创建超过这么久仍未发出的通知邮件不再发送（SMTP 长时间故障恢复后不补发过时提醒）
+    email_max_age_hours: int = 24
 
     @property
     def email_enabled(self) -> bool:
