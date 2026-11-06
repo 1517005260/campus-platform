@@ -1,25 +1,29 @@
 <script setup lang="ts">
-/** 申请详情与审批记录：基本信息、各级审批时间线；申请人可撤回待审申请。 */
-import { ElMessage, ElMessageBox } from "element-plus";
-import { onMounted, ref } from "vue";
+/** 申请详情与审批记录：基本信息、各级审批时间线；申请人可撤回审批中的申请、取消已通过且未开始的申请。 */
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 import { useAuthStore } from "@/core/auth/store";
+import { useRooms } from "@/core/rooms";
 
 import { applicationStatusLabel, recordActionLabel, roomApi, type Application } from "../api";
+import { withdrawAction, withdrawApplication } from "../withdraw";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const { load: loadRooms, nameOf } = useRooms({ is_whole_bookable: true });
 
+// 路由只匹配数字 id（见模块清单）
 const applicationId = Number(route.params.id);
 const detail = ref<Application | null>(null);
 const loading = ref(false);
 
-const isApplicant = () => auth.user?.id === detail.value?.applicant.id;
-const canWithdraw = () => detail.value !== null && detail.value.status === "pending" && isApplicant();
+const withdrawable = computed(() =>
+  detail.value && auth.user?.id === detail.value.applicant.id ? withdrawAction(detail.value) : null,
+);
 
 async function load() {
   loading.value = true;
@@ -36,19 +40,13 @@ async function load() {
 }
 
 async function withdraw() {
-  await ElMessageBox.confirm("撤回该申请？已通过的占用会一并释放。", "确认");
-  try {
-    await roomApi.POST("/api/v1/room/applications/{application_id}/withdraw", {
-      params: { path: { application_id: applicationId } },
-    });
-    ElMessage.success("已撤回");
-    await router.push("/room/mine");
-  } catch (e) {
-    showError(e);
-  }
+  if (detail.value && (await withdrawApplication(detail.value))) await load();
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadRooms();
+});
 </script>
 
 <template>
@@ -65,14 +63,14 @@ onMounted(load);
       <el-descriptions-item label="申请人"
         >{{ detail.applicant.name }}（{{ detail.applicant.username }}）</el-descriptions-item
       >
-      <el-descriptions-item label="教室编号">{{ detail.room_id }}</el-descriptions-item>
+      <el-descriptions-item label="教室">{{ nameOf(detail.room_id) }}</el-descriptions-item>
       <el-descriptions-item label="开始">{{ fmtTime(detail.start_at) }}</el-descriptions-item>
       <el-descriptions-item label="结束">{{ fmtTime(detail.end_at) }}</el-descriptions-item>
       <el-descriptions-item label="参加人数">{{ detail.attendees }}</el-descriptions-item>
       <el-descriptions-item label="审批进度"
         >{{ detail.current_level }} / {{ detail.total_levels }}</el-descriptions-item
       >
-      <el-descriptions-item label="当前级别截止" :span="2">
+      <el-descriptions-item v-if="detail.status === 'pending'" label="当前级别截止" :span="2">
         {{ detail.deadline_at ? `${fmtTime(detail.deadline_at)}（超时自动撤销）` : "—" }}
       </el-descriptions-item>
       <el-descriptions-item label="用途" :span="2">{{ detail.purpose }}</el-descriptions-item>
@@ -94,8 +92,8 @@ onMounted(load);
       </el-timeline>
     </el-card>
 
-    <div v-if="canWithdraw()" style="margin-top: 16px">
-      <el-button type="danger" @click="withdraw">撤回申请</el-button>
+    <div v-if="withdrawable" style="margin-top: 16px">
+      <el-button type="danger" @click="withdraw">{{ withdrawable.label }}申请</el-button>
     </div>
   </div>
 </template>
