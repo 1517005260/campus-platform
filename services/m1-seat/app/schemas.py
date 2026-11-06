@@ -5,10 +5,10 @@ Internal* 开头的模型属于跨模块契约，改动需要调用方（M2、M3
 """
 
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
 from campus_common.timeutil import TimeRangeModel
-from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, model_validator
 
 RoomType = Literal["classroom", "library", "other"]
 Outlet = Literal["none", "fixed", "rail"]
@@ -16,6 +16,9 @@ ReservationStatus = Literal["booked", "checked_in", "completed", "cancelled", "n
 BlockSource = Literal["M2_OCCUPY", "M3_MAINTENANCE"]
 # 座位状态变化的写入来源：学生预约、管理员停用/启用、M2 整室占用、M3 维修下架
 StatusSource = Literal["M1_RESERVATION", "M1_ADMIN", "M2_OCCUPY", "M3_MAINTENANCE"]
+# 请求中的名称、编号（楼宇、教室名称、座位编号）：去掉首尾空白后不能为空，长度上限各字段自定。
+# 只用于请求模型：响应模型不加该约束，已有数据不会因为规则收紧而读不出来。
+Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 # ---------- 空间与座位 ----------
@@ -32,9 +35,9 @@ class OpenHour(BaseModel):
 
 
 class RoomBase(BaseModel):
-    building: str = Field(max_length=50, examples=["第三教学楼"])
+    building: str = Field(examples=["第三教学楼"])
     floor: int
-    name: str = Field(max_length=50, examples=["H3106"])
+    name: str = Field(examples=["H3106"])
     type: RoomType
     dept_id: int | None = Field(None, description="为空表示全校开放；否则只对本院系开放")
     capacity: int = Field(ge=1)
@@ -44,15 +47,16 @@ class RoomBase(BaseModel):
 
 
 class RoomCreate(RoomBase):
-    pass
+    building: Label = Field(max_length=50, examples=["第三教学楼"])
+    name: Label = Field(max_length=50, examples=["H3106"])
 
 
 # PATCH 模型：没传的字段表示不修改（默认值不参与校验）；传了就按字段类型校验，
 # 只有本身可以为空的字段（如 dept_id）才接受 null，其他字段传 null 返回 422。
 class RoomUpdate(BaseModel):
-    building: str = Field(None, max_length=50)
+    building: Label = Field(None, max_length=50)
     floor: int = None
-    name: str = Field(None, max_length=50)
+    name: Label = Field(None, max_length=50)
     type: RoomType = None
     dept_id: int | None = Field(None, description="null 表示改为全校开放")
     capacity: int = Field(None, ge=1)
@@ -68,7 +72,7 @@ class Room(RoomBase):
 
 
 class SeatCreate(BaseModel):
-    code: str = Field(max_length=20, examples=["A-01"])
+    code: Label = Field(max_length=20, examples=["A-01"])
     outlet: Outlet = "none"
 
 
@@ -152,6 +156,8 @@ class CheckinCodeOut(BaseModel):
     code: str
     qr_payload: str = Field(description="二维码内容，微信扫码签到用")
     valid_date: date
+    early_minutes: int = Field(description="签到窗口：预约开始前多少分钟起可签到")
+    auto_cancel_min: int = Field(description="签到窗口：预约开始后多少分钟内可签到，之后自动取消并记违约")
 
 
 class ViolationOut(BaseModel):

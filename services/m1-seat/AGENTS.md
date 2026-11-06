@@ -15,7 +15,7 @@ M1 是座位状态的唯一写入方，也是 M2、M3 的被依赖方。`app/api
 - PATCH 模型（`RoomUpdate`、`SeatUpdate`）的字段写成非 Optional 类型、默认 `None`：没传表示不修改，传 null 由 Pydantic 拒绝（422）；只有本身可空的字段（`dept_id`）写成 `X | None`。
 - 读取“当前用户自己的预约”用 `shared.own_reservation()`（他人的预约同样返回 404；状态迁移时 `for_update=True`）。
 - 停用座位或教室时取消其尚未结束的有效预约（`ADMIN_DISABLED`，不记违约，通知学生）。
-- 院系自习室（`rooms.dept_id` 非空）只对 JWT 中 `dept_id` 相同的用户可见可约。
+- 院系自习室（`rooms.dept_id` 非空）只对 JWT 中 `dept_id` 相同的用户可约。教室可见性只用 `shared.room_visible()`：`seat:room_manage`、`seat:stats` 看全部教室（含停用），`seat:checkin_code` 看所有院系的启用教室，其他人看启用且院系允许的教室。
 - 只有 no_show 记违约。用户取消、被 M2/M3 占用而取消、因停用而取消都不记。
 - 每次座位状态变化写一条 `SeatStatusLog`，带 `source` 和 `ref_id`。
 

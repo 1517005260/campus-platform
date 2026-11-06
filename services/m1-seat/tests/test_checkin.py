@@ -4,9 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pytest
+from app.checkin_service import CHECKIN_EARLY_MINUTES
 from app.config import settings
 from app.main import app
-from app.models import CheckinCode, Reservation, Room, Seat
+from app.models import CheckinCode, Reservation, Room, Seat, Setting
 from campus_common.testing import user_headers
 from campus_common.timeutil import at_hour
 from fastapi.testclient import TestClient
@@ -81,6 +82,16 @@ def test_checkin_code_is_stable_and_has_qr_payload(client, db, as_screen):
     assert first.json()["code"].isdigit()
     assert first.json()["qr_payload"] == f"campus://checkin/{room.id}/{first.json()['code']}"
     assert db.scalar(select(func.count()).select_from(CheckinCode)) == 1
+
+
+def test_checkin_code_states_the_window_from_the_checkin_rules(client, db, as_screen):
+    room, _ = _room_with_seat(db)
+    db.add(Setting(key="auto_cancel_min", value=30))
+    db.commit()
+
+    screen = client.get(f"/api/v1/seat/rooms/{room.id}/checkin-code", headers=as_screen).json()
+
+    assert (screen["early_minutes"], screen["auto_cancel_min"]) == (CHECKIN_EARLY_MINUTES, 30)
 
 
 def test_checkin_code_generation_is_concurrency_safe(db, as_screen):

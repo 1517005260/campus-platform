@@ -23,9 +23,11 @@ router = APIRouter(prefix="/internal/v1", tags=["internal"], responses=ERROR_RES
 Caller = Annotated[str, Depends(require_service("m2-room", "m3-repair"))]
 
 
-@router.get("/rooms/{room_id}", summary="查询教室", response_model=s.Room)
+@router.get("/rooms/{room_id}", summary="查询教室（含座位）", response_model=s.RoomDetail)
 async def internal_get_room(room_id: int, caller: Caller, session: SessionDep):
-    """教室不存在：404 `NOT_FOUND`。"""
+    """不论启用状态与院系，返回教室及其全部座位（含停用的座位，M3 上报故障时用来校验座位归属）。
+
+    教室不存在：404 `NOT_FOUND`。"""
     return await block_service.get_room(session, room_id)
 
 

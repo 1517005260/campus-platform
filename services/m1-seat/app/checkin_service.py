@@ -40,11 +40,14 @@ async def get_checkin_code(session: AsyncSession, room_id: int) -> s.CheckinCode
                 CheckinCode.room_id == room_id, CheckinCode.valid_date == valid_date
             )
         )
+        rules = await aload_rules(session)
     return s.CheckinCodeOut(
         room_id=room_id,
         code=code,
         qr_payload=f"campus://checkin/{room_id}/{code}",
         valid_date=valid_date,
+        early_minutes=CHECKIN_EARLY_MINUTES,
+        auto_cancel_min=rules.auto_cancel_min,
     )
 
 

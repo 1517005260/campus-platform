@@ -17,9 +17,19 @@
       },
       "CheckinCodeOut": {
         "properties": {
+          "auto_cancel_min": {
+            "description": "签到窗口：预约开始后多少分钟内可签到，之后自动取消并记违约",
+            "title": "Auto Cancel Min",
+            "type": "integer"
+          },
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "early_minutes": {
+            "description": "签到窗口：预约开始前多少分钟起可签到",
+            "title": "Early Minutes",
+            "type": "integer"
           },
           "qr_payload": {
             "description": "二维码内容，微信扫码签到用",
@@ -40,7 +50,9 @@
           "room_id",
           "code",
           "qr_payload",
-          "valid_date"
+          "valid_date",
+          "early_minutes",
+          "auto_cancel_min"
         ],
         "title": "CheckinCodeOut",
         "type": "object"
@@ -609,7 +621,6 @@
             "examples": [
               "第三教学楼"
             ],
-            "maxLength": 50,
             "title": "Building",
             "type": "string"
           },
@@ -653,7 +664,6 @@
             "examples": [
               "H3106"
             ],
-            "maxLength": 50,
             "title": "Name",
             "type": "string"
           },
@@ -702,6 +712,7 @@
               "第三教学楼"
             ],
             "maxLength": 50,
+            "minLength": 1,
             "title": "Building",
             "type": "string"
           },
@@ -742,6 +753,7 @@
               "H3106"
             ],
             "maxLength": 50,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -779,7 +791,6 @@
             "examples": [
               "第三教学楼"
             ],
-            "maxLength": 50,
             "title": "Building",
             "type": "string"
           },
@@ -823,7 +834,6 @@
             "examples": [
               "H3106"
             ],
-            "maxLength": 50,
             "title": "Name",
             "type": "string"
           },
@@ -877,6 +887,7 @@
         "properties": {
           "building": {
             "maxLength": 50,
+            "minLength": 1,
             "title": "Building",
             "type": "string"
           },
@@ -912,6 +923,7 @@
           },
           "name": {
             "maxLength": 50,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -1042,6 +1054,7 @@
               "A-01"
             ],
             "maxLength": 20,
+            "minLength": 1,
             "title": "Code",
             "type": "string"
           },
@@ -1909,7 +1922,7 @@
     },
     "/api/v1/seat/rooms": {
       "get": {
-        "description": "院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；停用的教室只有 `seat:room_manage` 可见。",
+        "description": "院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；\n`seat:checkin_code` 可见所有院系的启用教室；`seat:room_manage`、`seat:stats` 可见全部教室（含停用）。\n详情、可用性的可见性相同。",
         "operationId": "list_rooms_api_v1_seat_rooms_get",
         "parameters": [
           {
@@ -2559,7 +2572,7 @@
     },
     "/api/v1/seat/rooms/{room_id}/checkin-code": {
       "get": {
-        "description": "业务日期当天的签到码，当天首次请求时生成。教室不存在：404 `NOT_FOUND`。",
+        "description": "业务日期当天的签到码，当天首次请求时生成。\n附签到窗口：预约开始前 `early_minutes` 分钟至开始后 `auto_cancel_min` 分钟（与签到接口同一组参数）。\n\n教室不存在：404 `NOT_FOUND`。",
         "operationId": "get_checkin_code_api_v1_seat_rooms__room_id__checkin_code_get",
         "parameters": [
           {
@@ -4009,7 +4022,7 @@
     },
     "/internal/v1/rooms/{room_id}": {
       "get": {
-        "description": "教室不存在：404 `NOT_FOUND`。",
+        "description": "不论启用状态与院系，返回教室及其全部座位（含停用的座位，M3 上报故障时用来校验座位归属）。\n\n教室不存在：404 `NOT_FOUND`。",
         "operationId": "internal_get_room_internal_v1_rooms__room_id__get",
         "parameters": [
           {
@@ -4059,7 +4072,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Room"
+                  "$ref": "#/components/schemas/RoomDetail"
                 }
               }
             },
@@ -4136,7 +4149,7 @@
             "description": "Bad Gateway"
           }
         },
-        "summary": "查询教室",
+        "summary": "查询教室（含座位）",
         "tags": [
           "internal"
         ]

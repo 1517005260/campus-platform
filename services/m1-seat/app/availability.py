@@ -74,8 +74,7 @@ async def room_availability(
     session: AsyncSession, user: CurrentUser, room_id: int, day: date
 ) -> list[s.SeatAvailability]:
     """每个座位每个整点的状态，各状态与搜索、预约使用同一组规则（开放时间、启用、占用、有效预约）。"""
-    room = await session.get(Room, room_id)
-    if room is None or not room_visible(room, user):
+    if await session.scalar(select(Room.id).where(Room.id == room_id, room_visible(user))) is None:
         raise not_found("教室", room_id)
 
     hour, start_at, end_at = (
