@@ -1,5 +1,8 @@
 import type { AppModule } from "@/core/module";
 
+/** 任一满足即可 */
+const AVAILABILITY_PERMS = ["seat:reserve", "seat:room_manage", "seat:stats"];
+
 const m: AppModule = {
   id: "m1-seat",
   title: "自习座位",
@@ -17,7 +20,8 @@ const m: AppModule = {
     {
       path: "/seat/availability",
       component: () => import("./pages/RoomAvailabilityPage.vue"),
-      meta: { title: "自习室可用性", perms: ["seat:reserve"] },
+      // 后端只要求登录；学生、教室管理员、运营管理员都要看
+      meta: { title: "自习室可用性", perms: AVAILABILITY_PERMS },
     },
     {
       path: "/seat/rooms",
@@ -43,7 +47,7 @@ const m: AppModule = {
   menu: [
     { title: "搜索座位", path: "/seat/search", perms: ["seat:reserve"] },
     { title: "我的预约", path: "/seat/mine", perms: ["seat:reserve"] },
-    { title: "自习室可用性", path: "/seat/availability", perms: ["seat:reserve"] },
+    { title: "自习室可用性", path: "/seat/availability", perms: AVAILABILITY_PERMS },
     { title: "教室与座位管理", path: "/seat/rooms", perms: ["seat:room_manage"] },
     { title: "签到屏", path: "/seat/checkin", perms: ["seat:checkin_code"] },
     { title: "运营统计", path: "/seat/stats", perms: ["seat:stats"] },

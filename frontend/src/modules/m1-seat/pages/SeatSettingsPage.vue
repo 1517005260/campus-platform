@@ -17,11 +17,17 @@ const form = reactive<SeatSettings>({
   remind_late_min: 10,
 });
 
-const fields: { key: keyof SeatSettings; label: string; min: number; max: number; hint: string }[] = [
+/** 上下限与后端 SeatSettings 一致（只有 max_hours 有上限） */
+const fields: { key: keyof SeatSettings; label: string; min: number; max?: number; hint: string }[] = [
   { key: "max_hours", label: "单次最长时长（小时）", min: 1, max: 24, hint: "限制一次预约的最大小时数" },
-  { key: "auto_cancel_min", label: "自动取消（分钟）", min: 1, max: 60, hint: "开始后未签到多少分钟自动取消并记违约" },
-  { key: "remind_before_min", label: "开始前提醒（分钟）", min: 0, max: 120, hint: "开始前多少分钟发提醒通知" },
-  { key: "remind_late_min", label: "开始后提醒（分钟）", min: 0, max: 60, hint: "开始后未签到多少分钟再次提醒" },
+  { key: "auto_cancel_min", label: "自动取消（分钟）", min: 1, hint: "开始后未签到多少分钟自动取消并记违约" },
+  { key: "remind_before_min", label: "开始前提醒（分钟）", min: 0, hint: "开始前多少分钟发提醒通知" },
+  {
+    key: "remind_late_min",
+    label: "开始后提醒（分钟）",
+    min: 0,
+    hint: "开始后未签到多少分钟再次提醒；必须小于自动取消分钟数，否则预约在提醒前就已取消",
+  },
 ];
 
 async function load() {
@@ -56,7 +62,7 @@ onMounted(load);
   <el-card style="max-width: 640px" v-loading="loading">
     <el-form label-width="180px">
       <el-form-item v-for="f in fields" :key="f.key" :label="f.label">
-        <el-input-number v-model="form[f.key]" :min="f.min" :max="f.max" />
+        <el-input-number v-model="form[f.key]" :min="f.min" :max="f.max" value-on-clear="min" />
         <div class="hint">{{ f.hint }}</div>
       </el-form-item>
       <el-form-item>

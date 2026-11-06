@@ -5,12 +5,11 @@ import { onMounted, ref } from "vue";
 import HourRangePicker, { type HourRange } from "@/core/components/HourRangePicker.vue";
 import { addDays, bizNow } from "@/core/format";
 import { showError } from "@/core/http";
+import { DEFAULT_OPEN_HOURS } from "@/core/rooms";
 
-import { seatApi, type SeatSearchItem } from "../api";
+import { outletLabel, seatApi, type SeatSearchItem } from "../api";
 
-// 与 HourRangePicker 的默认可选范围一致
-const OPEN_HOUR = 8;
-const CLOSE_HOUR = 22;
+const { open: OPEN_HOUR, close: CLOSE_HOUR } = DEFAULT_OPEN_HOURS;
 const DEFAULT_HOURS = 2;
 
 /** 下一个可预约的整点时段（业务时区）：当前整点已开始，不可约；今天已过关闭时间则取明天。
@@ -63,7 +62,11 @@ onMounted(async () => {
   await search();
 });
 
+/** 正在预约的座位，期间禁用所有预约按钮，防止重复提交 */
+const reservingSeatId = ref<number | null>(null);
+
 async function reserve(item: SeatSearchItem) {
+  reservingSeatId.value = item.seat.id;
   try {
     const { data } = await seatApi.POST("/api/v1/seat/reservations", {
       body: { seat_id: item.seat.id, ...range.value },
@@ -72,6 +75,8 @@ async function reserve(item: SeatSearchItem) {
     await search();
   } catch (e) {
     showError(e);
+  } finally {
+    reservingSeatId.value = null;
   }
 }
 </script>
@@ -79,7 +84,7 @@ async function reserve(item: SeatSearchItem) {
 <template>
   <el-form inline @submit.prevent="search">
     <el-form-item label="时段">
-      <HourRangePicker v-model="range" :max-hours="maxHours" />
+      <HourRangePicker v-model="range" :max-hours="maxHours" :min-date="bizNow().date" />
     </el-form-item>
     <el-form-item label="插座">
       <el-select v-model="outlet" clearable placeholder="不限" style="width: 140px">
@@ -96,12 +101,20 @@ async function reserve(item: SeatSearchItem) {
     <el-table-column label="座位" prop="seat.code" />
     <el-table-column label="插座">
       <template #default="{ row }">
-        {{ { none: "无", fixed: "固定", rail: "导轨" }[row.seat.outlet as "none" | "fixed" | "rail"] }}
+        {{ outletLabel[row.seat.outlet as SeatSearchItem["seat"]["outlet"]] }}
       </template>
     </el-table-column>
     <el-table-column width="120">
       <template #default="{ row }">
-        <el-button size="small" type="primary" @click="reserve(row)">预约</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :loading="reservingSeatId === row.seat.id"
+          :disabled="reservingSeatId !== null"
+          @click="reserve(row)"
+        >
+          预约
+        </el-button>
       </template>
     </el-table-column>
   </el-table>
