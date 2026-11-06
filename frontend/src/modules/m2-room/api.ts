@@ -1,13 +1,7 @@
 import type { components, paths } from "@/api/types/m2-room";
-import type { paths as SeatPaths } from "@/api/types/m1-seat";
 import { createApi } from "@/core/http";
 
 export const roomApi = createApi<paths>();
-/**
- * 选教室用 M1 的教室列表（is_whole_bookable=true，M1 契约中注明供 M2 申请选教室）。
- * 只读调用，仍走类型化客户端。
- */
-export const seatRoomsApi = createApi<SeatPaths>();
 
 export type Application = components["schemas"]["Application"];
 export type ApplicationForApprover = components["schemas"]["ApplicationForApprover"];

@@ -15,7 +15,8 @@ const m: AppModule = {
       meta: { title: "提交申请", perms: ["room:apply"] },
     },
     {
-      path: "/room/applications/:id",
+      // 非数字 id 不匹配，由兜底路由处理
+      path: "/room/applications/:id(\\d+)",
       component: () => import("./pages/ApplicationDetailPage.vue"),
       meta: { title: "申请详情", perms: ["room:apply", "room:approve"] },
     },

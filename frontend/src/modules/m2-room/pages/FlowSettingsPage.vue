@@ -3,9 +3,10 @@
  * 审批流与申请参数配置：审批流按教室类型/院系匹配（priority 越大越优先），
  * 每级指定范围（院系/学校）、审批权限与超时时间；申请参数控制门槛。
  */
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { onMounted, reactive, ref } from "vue";
 
+import { confirmAction } from "@/core/dialogs";
 import { showError } from "@/core/http";
 
 import { roomApi, type ApprovalFlow, type RoomSettings } from "../api";
@@ -58,10 +59,30 @@ async function loadFlows() {
   }
 }
 
+/** 保存前校验：名称与各级审批权限码不能为空（数字框清空时回到最小值，不会提交 null） */
+function flowsError(): string | null {
+  for (const [i, flow] of flows.value.entries()) {
+    if (!flow.name.trim()) return `第 ${i + 1} 个审批流缺少名称`;
+    if (flow.levels.some((l) => !l.approver_perm.trim())) return `审批流「${flow.name}」有审批级缺少权限码`;
+  }
+  return null;
+}
+
 async function saveFlows() {
+  const error = flowsError();
+  if (error) {
+    ElMessage.warning(error);
+    return;
+  }
   flowsSaving.value = true;
   try {
-    await roomApi.PUT("/api/v1/room/flows", { body: flows.value });
+    await roomApi.PUT("/api/v1/room/flows", {
+      body: flows.value.map((f) => ({
+        ...f,
+        name: f.name.trim(),
+        levels: f.levels.map((l) => ({ ...l, approver_perm: l.approver_perm.trim() })),
+      })),
+    });
     ElMessage.success("审批流已保存");
     await loadFlows();
   } catch (e) {
@@ -72,8 +93,7 @@ async function saveFlows() {
 }
 
 async function removeFlow(i: number) {
-  await ElMessageBox.confirm(`删除审批流「${flows.value[i]!.name}」？`, "确认");
-  flows.value.splice(i, 1);
+  if (await confirmAction(`删除审批流「${flows.value[i]!.name}」？保存后生效。`)) flows.value.splice(i, 1);
 }
 
 /** ---- 申请参数 ---- */
@@ -106,6 +126,10 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  if (settings.advance_days_min > settings.advance_days_max) {
+    ElMessage.warning("至少提前天数不能大于最多提前天数");
+    return;
+  }
   settingsSaving.value = true;
   try {
     const { data } = await roomApi.PUT("/api/v1/room/settings", { body: { ...settings } });
@@ -138,7 +162,7 @@ onMounted(() => {
           <el-option label="全校教室" :value="false" />
         </el-select>
         <span class="priority">优先级</span>
-        <el-input-number v-model="flow.priority" :min="0" />
+        <el-input-number v-model="flow.priority" :min="0" value-on-clear="min" />
         <el-button link type="danger" @click="removeFlow(i)">删除审批流</el-button>
       </div>
 
@@ -149,7 +173,7 @@ onMounted(() => {
         </el-select>
         <el-input v-model="l.approver_perm" placeholder="审批权限码" style="width: 200px" />
         <span class="timeout">超时（小时）</span>
-        <el-input-number v-model="l.timeout_hours" :min="1" />
+        <el-input-number v-model="l.timeout_hours" :min="1" value-on-clear="min" />
         <el-button link type="danger" :disabled="flow.levels.length <= 1" @click="removeLevel(flow, j)">
           删除
         </el-button>
@@ -168,7 +192,7 @@ onMounted(() => {
   <el-card header="申请参数" v-loading="settingsLoading" style="max-width: 640px">
     <el-form label-width="170px">
       <el-form-item v-for="f in settingFields" :key="f.key" :label="f.label">
-        <el-input-number v-model="settings[f.key]" :min="f.min" />
+        <el-input-number v-model="settings[f.key]" :min="f.min" value-on-clear="min" />
         <span class="hint">{{ f.hint }}</span>
       </el-form-item>
       <el-form-item>
