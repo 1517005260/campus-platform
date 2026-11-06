@@ -1,8 +1,10 @@
 <script setup lang="ts" generic="T">
 /**
- * 分页表格：el-table + el-pagination 的统一封装。
- * 列由默认插槽传入（el-table-column），当前页与每页条数用 v-model:page / v-model:size 双向绑定。
+ * 分页表格：el-table + el-pagination 的统一封装，配合 core/pagedList.ts 的 usePagedList()。
+ * 列由默认插槽传入（el-table-column），其余属性与事件（row-key、empty-text、@row-click 等）透传给 el-table；
+ * 当前页与每页条数用 v-model:page / v-model:size 双向绑定。
  */
+defineOptions({ inheritAttrs: false });
 defineProps<{
   data: T[];
   loading?: boolean;
@@ -16,7 +18,7 @@ const size = defineModel<number>("size", { required: true });
 
 <template>
   <div>
-    <el-table :data="data" v-loading="loading">
+    <el-table v-bind="$attrs" :data="data" v-loading="loading">
       <slot />
     </el-table>
     <el-pagination

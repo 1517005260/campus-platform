@@ -1,3 +1,4 @@
+import { ElMessage } from "element-plus";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { useAuthStore } from "@/core/auth/store";
@@ -23,7 +24,10 @@ router.beforeEach((to) => {
   const auth = useAuthStore();
   if (to.path === "/login") return auth.isLoggedIn ? "/" : true;
   if (!auth.isLoggedIn) return { path: "/login", query: { redirect: to.fullPath } };
-  if (to.meta.perms && !auth.can(...to.meta.perms)) return "/";
+  if (to.meta.perms && !auth.can(...to.meta.perms)) {
+    ElMessage.warning(`没有访问"${to.meta.title ?? to.path}"的权限`);
+    return "/";
+  }
   document.title = to.meta.title ? `${to.meta.title} · 校园资源服务平台` : "校园资源服务平台";
   return true;
 });

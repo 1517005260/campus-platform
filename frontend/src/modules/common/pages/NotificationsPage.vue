@@ -1,34 +1,21 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 
+import PaginatedTable from "@/core/components/PaginatedTable.vue";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 import { useNotificationStore } from "@/core/notifications";
+import { usePagedList } from "@/core/pagedList";
 
 import { commonApi, type NotificationOut } from "../api";
 
 const store = useNotificationStore();
-const items = ref<NotificationOut[]>([]);
-const total = ref(0);
-const page = ref(1);
-const size = 20;
 const onlyUnread = ref(false);
-const loading = ref(false);
-
-async function load() {
-  loading.value = true;
-  try {
-    const { data } = await commonApi.GET("/api/v1/notifications", {
-      params: { query: { page: page.value, size, unread: onlyUnread.value ? true : undefined } },
-    });
-    items.value = data!.items;
-    total.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    loading.value = false;
-  }
-}
+const { items, total, page, size, loading, load, reload } = usePagedList((p) =>
+  commonApi
+    .GET("/api/v1/notifications", { params: { query: { unread: onlyUnread.value || undefined, ...p } } })
+    .then((r) => r.data!),
+);
 
 async function markRead(n: NotificationOut) {
   if (n.read_at) return;
@@ -51,10 +38,7 @@ async function markAll() {
   }
 }
 
-watch(onlyUnread, () => {
-  page.value = 1;
-  load();
-});
+watch(onlyUnread, reload);
 onMounted(load);
 </script>
 
@@ -63,7 +47,15 @@ onMounted(load);
     <el-switch v-model="onlyUnread" active-text="只看未读" />
     <el-button :disabled="store.unread === 0" @click="markAll">全部标为已读</el-button>
   </div>
-  <el-table :data="items" v-loading="loading" empty-text="暂无通知" @row-click="markRead">
+  <PaginatedTable
+    :data="items"
+    :loading="loading"
+    :total="total"
+    v-model:page="page"
+    v-model:size="size"
+    empty-text="暂无通知"
+    @row-click="markRead"
+  >
     <el-table-column width="70">
       <template #default="{ row }">
         <el-tag v-if="!row.read_at" size="small" type="danger">未读</el-tag>
@@ -81,15 +73,7 @@ onMounted(load);
         </el-button>
       </template>
     </el-table-column>
-  </el-table>
-  <el-pagination
-    v-model:current-page="page"
-    class="pager"
-    layout="total, prev, pager, next"
-    :page-size="size"
-    :total="total"
-    @current-change="load"
-  />
+  </PaginatedTable>
 </template>
 
 <style scoped>
@@ -97,9 +81,5 @@ onMounted(load);
   display: flex;
   justify-content: space-between;
   margin-bottom: 12px;
-}
-.pager {
-  margin-top: 12px;
-  justify-content: flex-end;
 }
 </style>
