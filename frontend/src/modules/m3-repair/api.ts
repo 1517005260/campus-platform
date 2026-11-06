@@ -1,10 +1,7 @@
 import type { components, paths } from "@/api/types/m3-repair";
-import type { paths as SeatPaths } from "@/api/types/m1-seat";
 import { createApi } from "@/core/http";
 
 export const repairApi = createApi<paths>();
-/** 上报时选教室用 M1 的教室列表（只读调用）。 */
-export const seatRoomsApi = createApi<SeatPaths>();
 
 export type WorkOrder = components["schemas"]["WorkOrder"];
 export type OrderCreate = components["schemas"]["OrderCreate"];
@@ -21,14 +18,21 @@ export const orderStatusLabel: Record<WorkOrder["status"], string> = {
   cancelled: "已取消",
 };
 
-export const timelineActionLabel: Record<string, string> = {
-  submit: "上报",
+export const timelineActionLabel: Record<TimelineItem["action"], string> = {
+  report: "上报",
+  cancel: "取消",
   dispatch: "派单",
   start: "开始维修",
   complete: "完工",
   accept: "验收通过",
-  reject_acceptance: "验收不通过",
-  cancel: "取消",
-  escalate: "超时升级",
   admin_accept: "管理员代验收",
+  reject: "验收不通过",
+  escalate: "超时升级",
+};
+
+/** 超时升级通知的对象（按权限码），说明与 common 的 permissions.py 一致 */
+export const notifyPermLabel: Record<EscalationRule["notify_perm"], string> = {
+  "repair:dispatch": "派单员（repair:dispatch）",
+  "repair:manage": "报修管理（repair:manage）",
+  "repair:work": "维修工（repair:work）",
 };

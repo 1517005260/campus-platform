@@ -1,46 +1,34 @@
 <script setup lang="ts">
 /**
- * 我的报修：上报故障（教室来自 M1，分类来自系统参数）、查看工单与时间线、
- * 验收评价（评分 + 意见 / 不通过说明）、取消未完结工单。
+ * 我的报修：上报故障（教室与座位来自 M1，分类来自系统参数）、查看工单与时间线、
+ * 验收评价（评分 + 意见 / 不通过说明）、取消待派单的工单。
  */
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { onMounted, reactive, ref, watch } from "vue";
 
 import PaginatedTable from "@/core/components/PaginatedTable.vue";
+import { promptText } from "@/core/dialogs";
 import { showError } from "@/core/http";
-import { useAuthStore } from "@/core/auth/store";
+import { usePagedList } from "@/core/pagedList";
+import { roomLabel, useRooms, type Seat } from "@/core/rooms";
+import { seatApi } from "@/core/seatApi";
 
 import OrderDetailDialog from "./OrderDetailDialog.vue";
-import { orderStatusLabel, repairApi, seatRoomsApi, type WorkOrder } from "../api";
+import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
 
-const auth = useAuthStore();
+/** 描述、原因至少几个字（去掉首尾空白），与后端一致 */
+const TEXT_MIN = 2;
 
 /** ---- 列表 ---- */
-const items = ref<WorkOrder[]>([]);
-const loading = ref(false);
-const total = ref(0);
-const page = ref(1);
-const size = ref(10);
-
-async function load() {
-  loading.value = true;
-  try {
-    const { data } = await repairApi.GET("/api/v1/repair/orders/mine", {
-      params: { query: { page: page.value, size: size.value } },
-    });
-    items.value = data!.items;
-    total.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    loading.value = false;
-  }
-}
+const { items, total, page, size, loading, load } = usePagedList((p) =>
+  repairApi.GET("/api/v1/repair/orders/mine", { params: { query: p } }).then((r) => r.data!),
+);
 
 /** ---- 上报故障 ---- */
 const showForm = ref(false);
 const submitting = ref(false);
-const rooms = ref<{ id: number; label: string }[]>([]);
+const { rooms, load: loadRooms } = useRooms();
+const seats = ref<Seat[]>([]);
 const categories = ref<string[]>([]);
 const form = reactive({
   room_id: undefined as number | undefined,
@@ -52,24 +40,36 @@ const form = reactive({
 
 async function openForm() {
   showForm.value = true;
-  if (rooms.value.length === 0) {
-    try {
-      const [roomsRes, settingsRes] = await Promise.all([
-        seatRoomsApi.GET("/api/v1/seat/rooms", { params: { query: { page: 1, size: 100 } } }),
-        repairApi.GET("/api/v1/repair/settings"),
-      ]);
-      rooms.value = roomsRes.data!.items.map((r) => ({ id: r.id, label: `${r.building} ${r.name}` }));
-      categories.value = settingsRes.data!.categories;
-      if (form.category === "" && categories.value.length > 0) form.category = categories.value[0]!;
-    } catch (e) {
-      showError(e);
-    }
+  if (rooms.value.length > 0) return;
+  void loadRooms();
+  try {
+    const { data } = await repairApi.GET("/api/v1/repair/settings");
+    categories.value = data!.categories;
+    if (form.category === "" && categories.value.length > 0) form.category = categories.value[0]!;
+  } catch (e) {
+    showError(e);
   }
 }
 
+// 换教室后重新列出该教室的座位
+watch(
+  () => form.room_id,
+  async (roomId) => {
+    form.seat_id = undefined;
+    seats.value = [];
+    if (roomId === undefined) return;
+    try {
+      const { data } = await seatApi.GET("/api/v1/seat/rooms/{room_id}", { params: { path: { room_id: roomId } } });
+      seats.value = data!.seats;
+    } catch (e) {
+      showError(e);
+    }
+  },
+);
+
 async function submit() {
-  if (!form.room_id || !form.category || !form.description) {
-    ElMessage.warning("请填写教室、分类和描述");
+  if (!form.room_id || !form.category || form.description.trim().length < TEXT_MIN) {
+    ElMessage.warning(`请填写教室、分类和描述（至少 ${TEXT_MIN} 个字）`);
     return;
   }
   submitting.value = true;
@@ -79,7 +79,7 @@ async function submit() {
         room_id: form.room_id,
         seat_id: form.seat_id ?? null,
         category: form.category,
-        description: form.description,
+        description: form.description.trim(),
         photos: form.photos
           .split("\n")
           .map((p) => p.trim())
@@ -124,7 +124,7 @@ async function accept() {
   try {
     await repairApi.POST("/api/v1/repair/orders/{order_id}/accept", {
       params: { path: { order_id: accepting.value.id } },
-      body: { rating: acceptForm.rating, comment: acceptForm.comment || null },
+      body: { rating: acceptForm.rating, comment: acceptForm.comment.trim() || null },
     });
     ElMessage.success("已验收");
     accepting.value = null;
@@ -137,16 +137,11 @@ async function accept() {
 }
 
 async function rejectAcceptance(o: WorkOrder) {
-  let reason: string;
-  try {
-    const { value } = await ElMessageBox.prompt("请填写不通过的原因，工单将退回维修中", "验收不通过", {
-      inputType: "textarea",
-      inputValidator: (v: string) => v.trim().length >= 2 || "请填写原因",
-    });
-    reason = value.trim();
-  } catch {
-    return;
-  }
+  const reason = await promptText("请填写不通过的原因，工单将退回维修中", "验收不通过", {
+    inputType: "textarea",
+    minLength: TEXT_MIN,
+  });
+  if (reason === null) return;
   try {
     await repairApi.POST("/api/v1/repair/orders/{order_id}/reject-acceptance", {
       params: { path: { order_id: o.id } },
@@ -160,16 +155,11 @@ async function rejectAcceptance(o: WorkOrder) {
 }
 
 async function cancelOrder(o: WorkOrder) {
-  let reason: string;
-  try {
-    const { value } = await ElMessageBox.prompt("请填写取消原因", `取消工单 #${o.id}`, {
-      inputType: "textarea",
-      inputValidator: (v: string) => v.trim().length >= 2 || "请填写原因",
-    });
-    reason = value.trim();
-  } catch {
-    return;
-  }
+  const reason = await promptText("请填写取消原因", `取消工单 #${o.id}`, {
+    inputType: "textarea",
+    minLength: TEXT_MIN,
+  });
+  if (reason === null) return;
   try {
     await repairApi.POST("/api/v1/repair/orders/{order_id}/cancel", {
       params: { path: { order_id: o.id } },
@@ -182,7 +172,6 @@ async function cancelOrder(o: WorkOrder) {
   }
 }
 
-watch([page, size], () => void load());
 onMounted(load);
 </script>
 
@@ -213,13 +202,7 @@ onMounted(load);
           <el-button size="small" link type="success" @click="openAccept(row)">验收</el-button>
           <el-button size="small" link type="danger" @click="rejectAcceptance(row)">不通过</el-button>
         </template>
-        <el-button
-          v-if="auth.can('repair:report') && ['submitted', 'dispatched'].includes(row.status)"
-          size="small"
-          link
-          type="danger"
-          @click="cancelOrder(row)"
-        >
+        <el-button v-if="row.status === 'submitted'" size="small" link type="danger" @click="cancelOrder(row)">
           取消
         </el-button>
       </template>
@@ -230,12 +213,20 @@ onMounted(load);
     <el-form label-width="80px">
       <el-form-item label="教室" required>
         <el-select v-model="form.room_id" filterable placeholder="选择教室" style="width: 100%">
-          <el-option v-for="r in rooms" :key="r.id" :label="r.label" :value="r.id" />
+          <el-option v-for="r in rooms" :key="r.id" :label="roomLabel(r)" :value="r.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="座位">
-        <el-input-number v-model="form.seat_id" :min="1" placeholder="座位编号，教室整体问题可不填" />
-        <span class="hint">仅座位问题时填写座位编号</span>
+        <el-select
+          v-model="form.seat_id"
+          clearable
+          filterable
+          :disabled="form.room_id === undefined"
+          placeholder="教室整体问题不选"
+          style="width: 100%"
+        >
+          <el-option v-for="seat in seats" :key="seat.id" :label="seat.code" :value="seat.id" />
+        </el-select>
       </el-form-item>
       <el-form-item label="分类" required>
         <el-select v-model="form.category" style="width: 160px">
@@ -284,11 +275,3 @@ onMounted(load);
 
   <OrderDetailDialog v-model="detailVisible" :order="detailOrder" />
 </template>
-
-<style scoped>
-.hint {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  margin-left: 12px;
-}
-</style>
