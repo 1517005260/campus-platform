@@ -57,5 +57,6 @@ ROOM = {
     "capacity": 60,
     "is_whole_bookable": True,
     "status": "enabled",
+    "seats": [{"id": 11}, {"id": 12}],
 }
 M1_OK = ROOM | {"block_id": 1, "cancelled_reservations": [], "released": True}
