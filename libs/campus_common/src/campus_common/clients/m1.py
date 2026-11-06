@@ -12,6 +12,10 @@ from campus_common.timeutil import to_biz
 BlockSource = Literal["M2_OCCUPY", "M3_MAINTENANCE"]
 
 
+class M1Seat(BaseModel):
+    id: int
+
+
 class M1Room(BaseModel):
     id: int
     building: str
@@ -21,6 +25,7 @@ class M1Room(BaseModel):
     capacity: int
     is_whole_bookable: bool
     status: str
+    seats: list[M1Seat] = []  # 全部座位（含停用的）
 
 
 class M1Reservation(BaseModel):
@@ -46,6 +51,7 @@ STUB_ROOM = M1Room(
     capacity=60,
     is_whole_bookable=True,
     status="enabled",
+    seats=[M1Seat(id=seat_id) for seat_id in range(1, 61)],
 )
 
 
