@@ -2,16 +2,19 @@
 /**
  * 我的预约：签到、取消、一键复订；附我的违约记录。
  * 复订以历史预约为模板（同一座位），时段重新选择。
+ * 签到、取消按钮只在后端允许的时间内显示：开始前可取消；开始前 15 分钟至开始后 auto_cancel_min 分钟可签到。
  */
-import { ElMessage, ElMessageBox } from "element-plus";
-import { onMounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import HourRangePicker, { type HourRange } from "@/core/components/HourRangePicker.vue";
 import PaginatedTable from "@/core/components/PaginatedTable.vue";
+import { confirmAction, promptText } from "@/core/dialogs";
 import { bizNow, fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
+import { usePagedList } from "@/core/pagedList";
 
-import { seatApi, type ReservationDetail, type Violation } from "../api";
+import { seatApi, type ReservationDetail, type SeatSettings } from "../api";
 
 const tab = ref<"reservations" | "violations">("reservations");
 
@@ -22,34 +25,50 @@ const statusLabel: Record<string, string> = {
   cancelled: "已取消",
   no_show: "未签到（违约）",
 };
-
-/** ---- 预约记录 ---- */
-const items = ref<ReservationDetail[]>([]);
-const loading = ref(false);
-const total = ref(0);
-const page = ref(1);
-const size = ref(10);
-const statusFilter = ref<ReservationDetail["status"]>();
-
+const cancelReasonLabel: Record<string, string> = {
+  USER: "本人取消",
+  NO_CHECK_IN: "超时未签到",
+  ADMIN_DISABLED: "管理员停用座位或教室",
+  BLOCKED_BY_M2: "教室被整间借用",
+  BLOCKED_BY_M3: "教室维修",
+};
 const statusOptions = Object.entries(statusLabel).map(([value, label]) => ({ value, label }));
 
-async function load() {
-  loading.value = true;
-  try {
-    const { data } = await seatApi.GET("/api/v1/seat/reservations/mine", {
-      params: { query: { status: statusFilter.value || undefined, page: page.value, size: size.value } },
-    });
-    items.value = data!.items;
-    total.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    loading.value = false;
-  }
+/** 预约参数（复订时长上限、签到截止）；加载前按后端默认值 */
+const settings = ref<SeatSettings>({ max_hours: 4, auto_cancel_min: 15, remind_before_min: 15, remind_late_min: 10 });
+
+/** 当前时刻，每 30 秒刷新，用于按时间窗口显示签到、取消按钮 */
+const now = ref(Date.now());
+const timer = window.setInterval(() => (now.value = Date.now()), 30_000);
+onBeforeUnmount(() => window.clearInterval(timer));
+
+const MINUTE = 60_000;
+/**
+ * 开始前多少分钟起可签到，与后端 checkin_service.CHECKIN_EARLY_MINUTES 一致。
+ * 后端只在签到码接口（seat:checkin_code，学生无权调用）返回 early_minutes，预约参数里没有，因此这里保留常量。
+ */
+const CHECKIN_EARLY_MINUTES = 15;
+const canCancel = (r: ReservationDetail) => r.status === "booked" && now.value < Date.parse(r.start_at);
+function canCheckIn(r: ReservationDetail) {
+  const start = Date.parse(r.start_at);
+  return (
+    r.status === "booked" &&
+    now.value >= start - CHECKIN_EARLY_MINUTES * MINUTE &&
+    now.value < start + settings.value.auto_cancel_min * MINUTE
+  );
 }
 
+/** ---- 预约记录 ---- */
+const statusFilter = ref<ReservationDetail["status"]>();
+const { items, total, page, size, loading, load, reload } = usePagedList((p) =>
+  seatApi
+    .GET("/api/v1/seat/reservations/mine", { params: { query: { status: statusFilter.value || undefined, ...p } } })
+    .then((r) => r.data!),
+);
+watch(statusFilter, reload);
+
 async function cancel(r: ReservationDetail) {
-  await ElMessageBox.confirm(`取消 ${r.room.name} ${r.seat.code} 的预约？`, "确认");
+  if (!(await confirmAction(`取消 ${r.room.name} ${r.seat.code} 的预约？`))) return;
   try {
     await seatApi.POST("/api/v1/seat/reservations/{reservation_id}/cancel", {
       params: { path: { reservation_id: r.id } },
@@ -62,7 +81,8 @@ async function cancel(r: ReservationDetail) {
 }
 
 async function checkIn(r: ReservationDetail) {
-  const { value: code } = await ElMessageBox.prompt("输入教室屏幕上的签到码", "签到");
+  const code = await promptText("输入教室屏幕上的签到码", "签到", { minLength: 1 });
+  if (code === null) return;
   try {
     await seatApi.POST("/api/v1/seat/reservations/{reservation_id}/check-in", {
       params: { path: { reservation_id: r.id } },
@@ -78,17 +98,12 @@ async function checkIn(r: ReservationDetail) {
 /** ---- 一键复订 ---- */
 const rebooking = ref<ReservationDetail | null>(null);
 const rebookRange = ref<HourRange>({ date: bizNow().date, start_hour: 14, end_hour: 16 });
-const rebookMaxHours = ref(4);
-
-async function openRebook(r: ReservationDetail) {
-  const { data } = await seatApi.GET("/api/v1/seat/settings");
-  rebookMaxHours.value = data!.max_hours;
-  rebooking.value = r;
-}
+const rebookSubmitting = ref(false);
 
 async function rebook() {
   const r = rebooking.value;
   if (!r) return;
+  rebookSubmitting.value = true;
   try {
     const { data } = await seatApi.POST("/api/v1/seat/reservations/{reservation_id}/rebook", {
       params: { path: { reservation_id: r.id } },
@@ -99,41 +114,33 @@ async function rebook() {
     await load();
   } catch (e) {
     showError(e);
+  } finally {
+    rebookSubmitting.value = false;
   }
 }
 
 /** ---- 违约记录 ---- */
-const violations = ref<Violation[]>([]);
-const violationsLoading = ref(false);
-const violationsTotal = ref(0);
-const violationsPage = ref(1);
-const violationsSize = ref(10);
-
-async function loadViolations() {
-  violationsLoading.value = true;
-  try {
-    const { data } = await seatApi.GET("/api/v1/seat/violations/mine", {
-      params: { query: { page: violationsPage.value, size: violationsSize.value } },
-    });
-    violations.value = data!.items;
-    violationsTotal.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    violationsLoading.value = false;
-  }
-}
-
-watch(statusFilter, () => {
-  page.value = 1;
-  void load();
-});
-watch([page, size], () => void load());
-watch([violationsPage, violationsSize], () => void loadViolations());
+const {
+  items: violations,
+  total: violationsTotal,
+  page: violationsPage,
+  size: violationsSize,
+  loading: violationsLoading,
+  load: loadViolations,
+} = usePagedList((p) => seatApi.GET("/api/v1/seat/violations/mine", { params: { query: p } }).then((r) => r.data!));
 watch(tab, (t) => {
   if (t === "violations" && violations.value.length === 0) void loadViolations();
 });
-onMounted(load);
+
+onMounted(async () => {
+  void load();
+  try {
+    const { data } = await seatApi.GET("/api/v1/seat/settings");
+    settings.value = data!;
+  } catch (e) {
+    showError(e);
+  }
+});
 </script>
 
 <template>
@@ -154,14 +161,16 @@ onMounted(load);
         <el-table-column label="状态">
           <template #default="{ row }">{{ statusLabel[row.status] ?? row.status }}</template>
         </el-table-column>
-        <el-table-column label="取消原因" prop="cancel_reason" show-overflow-tooltip />
+        <el-table-column label="取消原因" show-overflow-tooltip>
+          <template #default="{ row }">{{
+            row.cancel_reason ? (cancelReasonLabel[row.cancel_reason] ?? row.cancel_reason) : ""
+          }}</template>
+        </el-table-column>
         <el-table-column width="220">
           <template #default="{ row }">
-            <template v-if="row.status === 'booked'">
-              <el-button size="small" type="primary" @click="checkIn(row)">签到</el-button>
-              <el-button size="small" @click="cancel(row)">取消</el-button>
-            </template>
-            <el-button v-else size="small" @click="openRebook(row)">一键复订</el-button>
+            <el-button v-if="canCheckIn(row)" size="small" type="primary" @click="checkIn(row)">签到</el-button>
+            <el-button v-if="canCancel(row)" size="small" @click="cancel(row)">取消</el-button>
+            <el-button v-if="row.status !== 'booked'" size="small" @click="rebooking = row">一键复订</el-button>
           </template>
         </el-table-column>
       </PaginatedTable>
@@ -192,12 +201,17 @@ onMounted(load);
   >
     <el-form label-width="60px">
       <el-form-item label="时段">
-        <HourRangePicker v-model="rebookRange" :max-hours="rebookMaxHours" />
+        <HourRangePicker
+          v-model="rebookRange"
+          :max-hours="settings.max_hours"
+          :open-hours="rebooking?.room.open_hours"
+          :min-date="bizNow().date"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="rebooking = null">取消</el-button>
-      <el-button type="primary" @click="rebook">复订</el-button>
+      <el-button type="primary" :loading="rebookSubmitting" @click="rebook">复订</el-button>
     </template>
   </el-dialog>
 </template>

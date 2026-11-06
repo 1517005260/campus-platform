@@ -7,10 +7,11 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import { bizNow } from "@/core/format";
 import { showError } from "@/core/http";
+import { DEFAULT_OPEN_HOURS, openHoursOn, roomLabel, useRooms } from "@/core/rooms";
 
 import { seatApi, type RoomDetail, type SeatAvailability } from "../api";
 
-const rooms = ref<{ id: number; label: string }[]>([]);
+const { rooms, load: loadRooms } = useRooms({ is_study_room: true });
 const roomId = ref<number>();
 const date = ref(bizNow().date);
 const detail = ref<RoomDetail | null>(null);
@@ -19,14 +20,9 @@ const loading = ref(false);
 
 const stateLabel: Record<string, string> = { free: "空闲", reserved: "已约", blocked: "封闭", closed: "未开放" };
 
-/** 展示的整点列：该教室当天开放时间内的整点；没有开放时间时默认 8–22 */
+/** 展示的整点列：该教室当天开放时间内的整点；当天没有开放时间时按默认范围显示（全部为未开放） */
 const hours = computed(() => {
-  // 纯日期按 UTC 解析再取星期，避免浏览器时区把日期挪一天
-  const weekday = (new Date(`${date.value}T00:00:00Z`).getUTCDay() + 6) % 7; // 0 = 周一
-  const today = (detail.value?.open_hours ?? []).filter((h) => h.weekday === weekday);
-  if (today.length === 0) return Array.from({ length: 14 }, (_, i) => i + 8);
-  const open = Math.min(...today.map((h) => h.open_hour));
-  const close = Math.max(...today.map((h) => h.close_hour));
+  const { open, close } = openHoursOn(detail.value?.open_hours ?? [], date.value) ?? DEFAULT_OPEN_HOURS;
   return Array.from({ length: close - open }, (_, i) => open + i);
 });
 
@@ -40,18 +36,6 @@ const availabilityBySeat = computed(() => {
 
 function seatState(seatId: number, hour: number): string {
   return availabilityBySeat.value.get(seatId)?.get(hour) ?? "closed";
-}
-
-async function loadRooms() {
-  try {
-    const { data } = await seatApi.GET("/api/v1/seat/rooms", {
-      params: { query: { is_study_room: true, page: 1, size: 100 } },
-    });
-    rooms.value = data!.items.map((r) => ({ id: r.id, label: `${r.building} ${r.name}` }));
-    if (roomId.value === undefined && data!.items.length > 0) roomId.value = data!.items[0]!.id;
-  } catch (e) {
-    showError(e);
-  }
 }
 
 async function load() {
@@ -73,10 +57,11 @@ async function load() {
   }
 }
 
+// 选中第一个自习室后由 watch 触发首次加载
 watch([roomId, date], () => void load());
 onMounted(async () => {
   await loadRooms();
-  await load();
+  roomId.value = rooms.value[0]?.id;
 });
 </script>
 
@@ -85,7 +70,7 @@ onMounted(async () => {
     <el-form inline @submit.prevent="load">
       <el-form-item label="自习室">
         <el-select v-model="roomId" filterable style="width: 260px">
-          <el-option v-for="r in rooms" :key="r.id" :label="r.label" :value="r.id" />
+          <el-option v-for="r in rooms" :key="r.id" :label="roomLabel(r)" :value="r.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="日期">

@@ -1,35 +1,31 @@
 <script setup lang="ts">
 /**
- * 签到屏页面：供教室屏幕展示当日签到码。每 60 秒自动刷新。
- * 学生在"我的预约"里输入该签到码完成签到。
+ * 签到屏页面：供教室屏幕展示当日签到码与二维码。每 60 秒自动刷新。
+ * 学生扫码或在"我的预约"里输入该签到码完成签到。
  */
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import QRCode from "qrcode";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
+import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
+import { roomLabel, useRooms } from "@/core/rooms";
 
-import { seatApi, type CheckinCode, type Room } from "../api";
+import { seatApi, type CheckinCode } from "../api";
 
-const rooms = ref<Room[]>([]);
+const { rooms, load: loadRooms, nameOf } = useRooms({ is_study_room: true });
 const roomId = ref<number>();
 const code = ref<CheckinCode | null>(null);
+const qrImage = ref("");
+const windowHint = computed(() =>
+  code.value
+    ? `请在预约开始前 ${code.value.early_minutes} 分钟至开始后 ${code.value.auto_cancel_min} 分钟内扫码或在"我的预约"输入签到码，超时未签到将自动取消并记违约`
+    : "",
+);
 const loading = ref(false);
 const loadedAt = ref("");
 
 const REFRESH_MS = 60_000;
 let timer: number | undefined;
-
-async function loadRooms() {
-  try {
-    const { data } = await seatApi.GET("/api/v1/seat/rooms", {
-      params: { query: { is_study_room: true, page: 1, size: 100 } },
-    });
-    rooms.value = data!.items;
-    if (roomId.value === undefined && rooms.value.length > 0) roomId.value = rooms.value[0]!.id;
-    if (roomId.value !== undefined) await loadCode();
-  } catch (e) {
-    showError(e);
-  }
-}
 
 async function loadCode() {
   if (roomId.value === undefined) return;
@@ -39,7 +35,8 @@ async function loadCode() {
       params: { path: { room_id: roomId.value } },
     });
     code.value = data!;
-    loadedAt.value = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+    qrImage.value = await QRCode.toDataURL(data!.qr_payload, { width: 240, margin: 1 });
+    loadedAt.value = fmtTime(new Date());
   } catch (e) {
     showError(e);
   } finally {
@@ -47,8 +44,10 @@ async function loadCode() {
   }
 }
 
-onMounted(() => {
-  void loadRooms();
+onMounted(async () => {
+  await loadRooms();
+  roomId.value = rooms.value[0]?.id;
+  await loadCode();
   timer = window.setInterval(() => void loadCode(), REFRESH_MS);
 });
 onBeforeUnmount(() => window.clearInterval(timer));
@@ -59,7 +58,7 @@ onBeforeUnmount(() => window.clearInterval(timer));
     <el-form inline @submit.prevent="loadCode">
       <el-form-item label="自习室">
         <el-select v-model="roomId" filterable style="width: 260px" @change="loadCode">
-          <el-option v-for="r in rooms" :key="r.id" :label="`${r.building} ${r.name}`" :value="r.id" />
+          <el-option v-for="r in rooms" :key="r.id" :label="roomLabel(r)" :value="r.id" />
         </el-select>
       </el-form-item>
       <el-button type="primary" native-type="submit" :loading="loading">刷新</el-button>
@@ -67,12 +66,12 @@ onBeforeUnmount(() => window.clearInterval(timer));
 
     <el-empty v-if="!code && !loading" description="选择自习室后显示签到码" />
     <div v-else class="screen" v-loading="loading">
-      <div class="room">{{ rooms.find((r) => r.id === roomId)?.name ?? "" }}</div>
-      <div class="label">请在本页对应自习室就座后，于预约开始前扫码或在"我的预约"输入签到码</div>
+      <div class="room">{{ roomId !== undefined ? nameOf(roomId) : "" }}</div>
+      <div v-if="code" class="label">{{ windowHint }}</div>
+      <img v-if="qrImage" :src="qrImage" alt="签到二维码" class="qr" />
       <div class="code">{{ code?.code }}</div>
       <div class="meta">
         <div>日期：{{ code?.valid_date }}</div>
-        <div class="qr">{{ code?.qr_payload }}</div>
         <div class="updated">更新于 {{ loadedAt }}，每分钟自动刷新</div>
       </div>
     </div>
@@ -107,9 +106,8 @@ onBeforeUnmount(() => window.clearInterval(timer));
   color: var(--el-text-color-secondary);
 }
 .qr {
-  color: var(--el-text-color-placeholder);
-  font-size: 13px;
-  word-break: break-all;
+  width: 240px;
+  height: 240px;
 }
 .updated {
   font-size: 12px;

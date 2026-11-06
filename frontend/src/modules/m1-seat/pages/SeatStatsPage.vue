@@ -4,12 +4,13 @@ import { computed, onMounted, ref } from "vue";
 
 import { addDays, bizNow } from "@/core/format";
 import { showError } from "@/core/http";
+import { roomLabel, useRooms } from "@/core/rooms";
 
-import { seatApi, type Room, type UsageStats } from "../api";
+import { seatApi, type UsageStats } from "../api";
 
 const dateFrom = ref(addDays(bizNow().date, -6));
 const dateTo = ref(bizNow().date);
-const rooms = ref<Room[]>([]);
+const { rooms, load: loadRooms, nameOf } = useRooms({ is_study_room: true });
 const roomId = ref<number>();
 const stats = ref<UsageStats | null>(null);
 const loading = ref(false);
@@ -32,22 +33,16 @@ async function load() {
     });
     stats.value = data!;
   } catch (e) {
+    stats.value = null; // 不保留上一次查询的结果，避免误读
     showError(e);
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(async () => {
-  try {
-    const { data } = await seatApi.GET("/api/v1/seat/rooms", {
-      params: { query: { page: 1, size: 100 } },
-    });
-    rooms.value = data!.items;
-  } catch (e) {
-    showError(e);
-  }
-  await load();
+onMounted(() => {
+  void loadRooms();
+  void load();
 });
 </script>
 
@@ -55,13 +50,13 @@ onMounted(async () => {
   <div>
     <el-form inline @submit.prevent="load">
       <el-form-item label="起止日期">
-        <el-date-picker v-model="dateFrom" type="date" value-format="YYYY-MM-DD" />
+        <el-date-picker v-model="dateFrom" type="date" value-format="YYYY-MM-DD" :clearable="false" />
         <span style="margin: 0 8px">至</span>
-        <el-date-picker v-model="dateTo" type="date" value-format="YYYY-MM-DD" />
+        <el-date-picker v-model="dateTo" type="date" value-format="YYYY-MM-DD" :clearable="false" />
       </el-form-item>
       <el-form-item label="自习室">
         <el-select v-model="roomId" clearable filterable placeholder="全部" style="width: 220px">
-          <el-option v-for="r in rooms" :key="r.id" :label="`${r.building} ${r.name}`" :value="r.id" />
+          <el-option v-for="r in rooms" :key="r.id" :label="roomLabel(r)" :value="r.id" />
         </el-select>
       </el-form-item>
       <el-button type="primary" native-type="submit" :loading="loading">查询</el-button>
@@ -73,7 +68,7 @@ onMounted(async () => {
           <el-statistic title="座位利用率" :value="stats ? stats.utilization * 100 : 0" :precision="1">
             <template #suffix>%</template>
           </el-statistic>
-          <div class="hint">已签到小时数 / 可预约小时数</div>
+          <div class="hint">签到使用的座位时长 / 开放座位时长（扣除整室占用与维修下架）</div>
         </el-card>
       </el-col>
       <el-col :span="8">
@@ -81,13 +76,13 @@ onMounted(async () => {
           <el-statistic title="违约率" :value="stats ? stats.no_show_rate * 100 : 0" :precision="1">
             <template #suffix>%</template>
           </el-statistic>
-          <div class="hint">未签到取消 / 全部预约</div>
+          <div class="hint">未签到违约 / （未签到违约 + 已完成）</div>
         </el-card>
       </el-col>
       <el-col :span="8">
         <el-card>
           <el-statistic title="自习室数" :value="stats?.by_room.length ?? 0" />
-          <div class="hint">统计范围内出现预约的自习室</div>
+          <div class="hint">参与统计的自习室（含没有预约的）</div>
         </el-card>
       </el-col>
     </el-row>
@@ -104,7 +99,7 @@ onMounted(async () => {
       <el-table :data="stats?.by_room ?? []">
         <el-table-column label="自习室" width="160">
           <template #default="{ row }">
-            {{ rooms.find((r) => r.id === row.room_id)?.name ?? `#${row.room_id}` }}
+            {{ nameOf(row.room_id) }}
           </template>
         </el-table-column>
         <el-table-column label="利用率">
