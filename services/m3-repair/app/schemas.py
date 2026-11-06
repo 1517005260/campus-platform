@@ -1,10 +1,20 @@
 """M3 接口契约。"""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, StringConstraints, field_validator
 
 OrderStatus = Literal["submitted", "dispatched", "in_progress", "pending_acceptance", "closed", "cancelled"]
+# 时间线动作：admin_accept 为管理员代验收，accept 为报修人验收；escalate 是系统动作（actor 为空）
+TimelineAction = Literal[
+    "report", "cancel", "dispatch", "start", "complete", "accept", "admin_accept", "reject", "escalate"
+]
+# 超时升级通知的对象：拥有该权限码的人
+NotifyPerm = Literal["repair:dispatch", "repair:manage", "repair:work"]
+Category = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
+
+# 描述、原因、说明：去掉首尾空白后至少 2 个字（长度上限各字段自定）
+Remark = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2)]
 
 
 class UserBrief(BaseModel):
@@ -18,14 +28,14 @@ class OrderCreate(BaseModel):
     room_id: int
     seat_id: int | None = Field(None, description="具体座位；为空表示教室整体问题")
     category: str = Field(examples=["空调", "照明", "桌椅", "插座", "网络"])
-    description: str = Field(min_length=2, max_length=1000)
+    description: Remark = Field(max_length=1000)
     photos: list[str] = Field(default_factory=list, description="图片 URL")
 
 
 class TimelineItem(BaseModel):
     at: AwareDatetime
     actor: UserBrief | None
-    action: str
+    action: TimelineAction
     from_status: OrderStatus | None
     to_status: OrderStatus | None
     note: str | None
@@ -49,7 +59,7 @@ class WorkOrder(BaseModel):
 
 
 class CancelRequest(BaseModel):
-    reason: str = Field(max_length=200)
+    reason: Remark = Field(max_length=200)
 
 
 class DispatchRequest(BaseModel):
@@ -59,7 +69,7 @@ class DispatchRequest(BaseModel):
 
 
 class CompleteRequest(BaseModel):
-    note: str = Field(max_length=1000)
+    note: Remark = Field(max_length=1000)
     photos: list[str] = Field(default_factory=list)
 
 
@@ -69,23 +79,30 @@ class AcceptRequest(BaseModel):
 
 
 class RejectAcceptanceRequest(BaseModel):
-    reason: str = Field(max_length=500)
+    reason: Remark = Field(max_length=500)
 
 
 class EscalationRule(BaseModel):
     status: Literal["dispatched", "in_progress", "pending_acceptance"]
     timeout_hours: int = Field(ge=1)
-    notify_perm: str = Field("repair:manage", description="升级时通知拥有该权限的人")
+    notify_perm: NotifyPerm = Field("repair:manage", description="升级时通知拥有该权限的人")
 
 
 class RepairSettings(BaseModel):
-    categories: list[str] = ["空调", "照明", "桌椅", "插座", "网络", "其他"]
+    categories: list[Category] = Field(["空调", "照明", "桌椅", "插座", "网络", "其他"], min_length=1)
     escalation_rules: list[EscalationRule] = [
         EscalationRule(status="dispatched", timeout_hours=24),
         EscalationRule(status="in_progress", timeout_hours=72),
         EscalationRule(status="pending_acceptance", timeout_hours=72),
     ]
-    admin_accept_after_hours: int = Field(72, description="报修人超过该时长未验收，管理员可代验收")
+    admin_accept_after_hours: int = Field(72, ge=1, description="报修人超过该时长未验收，管理员可代验收")
+
+    @field_validator("categories")
+    @classmethod
+    def _unique_categories(cls, categories: list[str]) -> list[str]:
+        if len(categories) != len(set(categories)):
+            raise ValueError("分类不能重复")
+        return categories
 
     @field_validator("escalation_rules")
     @classmethod

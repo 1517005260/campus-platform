@@ -37,6 +37,8 @@ PRODUCER = settings.service_name
 
 async def report(session: AsyncSession, user: CurrentUser, body: s.OrderCreate) -> s.WorkOrder:
     room = await _ensure_room(body.room_id)
+    if body.seat_id is not None and body.seat_id not in {seat.id for seat in room.seats}:
+        raise AppError(400, "SEAT_NOT_IN_ROOM", "座位不属于该教室")
     at = now()
     async with session.begin():
         rules = await aload_params(session, Setting, s.RepairSettings)
@@ -91,8 +93,9 @@ async def accept(
             # 本地提交失败时教室已恢复、工单仍待验收，重试验收会再次释放（幂等）后关闭。
             await clients.release_room(order.id)
         await _remember(session, user)
+        action = "admin_accept" if by_admin else "accept"
         await _move(
-            session, order, user.id, "accept", "closed", at, expected="pending_acceptance", note=body.comment
+            session, order, user.id, action, "closed", at, expected="pending_acceptance", note=body.comment
         )
         order.rating, order.rating_comment, order.closed_by = body.rating, body.comment, user.id
         notify(
@@ -349,16 +352,27 @@ def _check_acceptor(user: CurrentUser, order: WorkOrder, rules: s.RepairSettings
     raise AppError(403, "FORBIDDEN", "只有报修人或到时代验收的管理员可以验收")
 
 
+STATUS_LABELS: dict[s.OrderStatus, str] = {
+    "submitted": "待派单",
+    "dispatched": "已派单",
+    "in_progress": "维修中",
+    "pending_acceptance": "待验收",
+    "closed": "已关闭",
+    "cancelled": "已取消",
+}
+
+
 def _require_status(order: WorkOrder, expected: str | None) -> None:
     if order.status != expected:
-        raise AppError(409, "ORDER_STATE_CONFLICT", f"当前状态为 {order.status}，不能执行此操作")
+        label = STATUS_LABELS[order.status]
+        raise AppError(409, "ORDER_STATE_CONFLICT", f"工单当前为“{label}”，不能执行此操作")
 
 
 async def _move(
     session: AsyncSession,
     order: WorkOrder,
     actor_id: int,
-    action: str,
+    action: s.TimelineAction,
     to_status: str,
     at: datetime,
     *,

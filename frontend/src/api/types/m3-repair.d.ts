@@ -15,9 +15,10 @@ export interface paths {
         put?: never;
         /**
          * 上报故障
-         * @description 校验 room_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。
+         * @description 校验 room_id、seat_id（调用 M1）与 category（取自配置）。通知拥有 repair:dispatch 的调度员。
          *
-         *     错误：400 `ROOM_NOT_FOUND`（M1 中没有该教室）、400 `UNKNOWN_CATEGORY`、
+         *     错误：400 `ROOM_NOT_FOUND`（M1 中没有该教室）、400 `SEAT_NOT_IN_ROOM`（座位不存在或不属于该教室）、
+         *     400 `UNKNOWN_CATEGORY`、
          *     502 `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR`（M1 不可达或拒绝调用）。
          */
         post: operations["report_api_v1_repair_orders_post"];
@@ -59,7 +60,8 @@ export interface paths {
         /**
          * 验收通过并评价
          * @description pending_acceptance → closed，通知维修工。报修人本人验收；完工 admin_accept_after_hours 后（含该时刻）
-         *     repair:manage 可代验收（closed_by 记录实际操作人）。若曾下架教室，先调用 M1 释放，成功后才关闭工单。
+         *     repair:manage 可代验收（closed_by 记录实际操作人，时间线动作为 `admin_accept`）。
+         *     若曾下架教室，先调用 M1 释放，成功后才关闭工单。
          *
          *     错误：404 `NOT_FOUND`（看不到该工单）、409 `ORDER_STATE_CONFLICT`（不在待验收）、
          *     403 `ADMIN_ACCEPT_TOO_EARLY`（管理员代验收时间未到）、
@@ -336,8 +338,9 @@ export interface components {
              * Notify Perm
              * @description 升级时通知拥有该权限的人
              * @default repair:manage
+             * @enum {string}
              */
-            notify_perm: string;
+            notify_perm: "repair:dispatch" | "repair:manage" | "repair:work";
             /**
              * Status
              * @enum {string}
@@ -432,8 +435,11 @@ export interface components {
         };
         /** TimelineItem */
         TimelineItem: {
-            /** Action */
-            action: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "report" | "cancel" | "dispatch" | "start" | "complete" | "accept" | "admin_accept" | "reject" | "escalate";
             actor: components["schemas"]["UserBrief"] | null;
             /**
              * At
