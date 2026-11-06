@@ -9,6 +9,7 @@ from campus_common.timeutil import now
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app import schemas as s
 from app.models import Outbox, Reservation, Room, RoomBlock, Seat, SeatStatusLog, Violation
@@ -23,11 +24,11 @@ def _validate_source(caller: str, source: str) -> None:
         raise AppError(403, "BLOCK_SOURCE_FORBIDDEN", f"{caller} 不能操作 {source} 占用")
 
 
-async def get_room(session: AsyncSession, room_id: int) -> s.Room:
-    room = await session.get(Room, room_id)
+async def get_room(session: AsyncSession, room_id: int) -> s.RoomDetail:
+    room = await session.scalar(select(Room).where(Room.id == room_id).options(selectinload(Room.seats)))
     if room is None:
         raise not_found("教室", room_id)
-    return s.Room.model_validate(room, from_attributes=True)
+    return s.RoomDetail.model_validate(room, from_attributes=True)
 
 
 async def _existing_block(session: AsyncSession, body: s.InternalBlockCreate) -> s.InternalBlockResult:

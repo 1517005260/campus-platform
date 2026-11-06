@@ -14,7 +14,7 @@ from campus_common.db import constraint_errors
 from campus_common.errors import AppError, not_found
 from campus_common.pagination import Page, PageParams, paginate
 from campus_common.timeutil import now
-from sqlalchemy import ColumnElement, delete, or_, select
+from sqlalchemy import ColumnElement, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -70,21 +70,19 @@ async def list_rooms(
         conditions.append(Room.is_study_room.is_(is_study_room))
     if is_whole_bookable is not None:
         conditions.append(Room.is_whole_bookable.is_(is_whole_bookable))
-    if not user.has("seat:room_manage"):
-        conditions.append(Room.status == "enabled")
-        conditions.append(or_(Room.dept_id.is_(None), Room.dept_id == user.dept_id))
-
     return await paginate(
         session,
-        select(Room).where(*conditions).order_by(Room.building, Room.name, Room.id),
+        select(Room).where(room_visible(user), *conditions).order_by(Room.building, Room.name, Room.id),
         params,
         lambda room: s.Room.model_validate(room, from_attributes=True),
     )
 
 
 async def get_room(session: AsyncSession, user: CurrentUser, room_id: int) -> s.RoomDetail:
-    room = await session.scalar(select(Room).where(Room.id == room_id).options(selectinload(Room.seats)))
-    if room is None or not room_visible(room, user):
+    room = await session.scalar(
+        select(Room).where(Room.id == room_id, room_visible(user)).options(selectinload(Room.seats))
+    )
+    if room is None:
         raise not_found("教室", room_id)
     return s.RoomDetail.model_validate(room, from_attributes=True)
 

@@ -114,7 +114,9 @@ export interface paths {
         };
         /**
          * 查询自习室列表
-         * @description 院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；停用的教室只有 `seat:room_manage` 可见。
+         * @description 院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；
+         *     `seat:checkin_code` 可见所有院系的启用教室；`seat:room_manage`、`seat:stats` 可见全部教室（含停用）。
+         *     详情、可用性的可见性相同。
          */
         get: operations["list_rooms_api_v1_seat_rooms_get"];
         put?: never;
@@ -187,7 +189,10 @@ export interface paths {
         };
         /**
          * 当日签到码（教室屏幕用）
-         * @description 业务日期当天的签到码，当天首次请求时生成。教室不存在：404 `NOT_FOUND`。
+         * @description 业务日期当天的签到码，当天首次请求时生成。
+         *     附签到窗口：预约开始前 `early_minutes` 分钟至开始后 `auto_cancel_min` 分钟（与签到接口同一组参数）。
+         *
+         *     教室不存在：404 `NOT_FOUND`。
          */
         get: operations["get_checkin_code_api_v1_seat_rooms__room_id__checkin_code_get"];
         put?: never;
@@ -423,8 +428,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 查询教室
-         * @description 教室不存在：404 `NOT_FOUND`。
+         * 查询教室（含座位）
+         * @description 不论启用状态与院系，返回教室及其全部座位（含停用的座位，M3 上报故障时用来校验座位归属）。
+         *
+         *     教室不存在：404 `NOT_FOUND`。
          */
         get: operations["internal_get_room_internal_v1_rooms__room_id__get"];
         put?: never;
@@ -519,8 +526,18 @@ export interface components {
     schemas: {
         /** CheckinCodeOut */
         CheckinCodeOut: {
+            /**
+             * Auto Cancel Min
+             * @description 签到窗口：预约开始后多少分钟内可签到，之后自动取消并记违约
+             */
+            auto_cancel_min: number;
             /** Code */
             code: string;
+            /**
+             * Early Minutes
+             * @description 签到窗口：预约开始前多少分钟起可签到
+             */
+            early_minutes: number;
             /**
              * Qr Payload
              * @description 二维码内容，微信扫码签到用
@@ -3026,7 +3043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Room"];
+                    "application/json": components["schemas"]["RoomDetail"];
                 };
             };
             /** @description Bad Request */

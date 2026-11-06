@@ -1,8 +1,9 @@
 """教室、开放时间和座位主数据行为。"""
 
 import pytest
+from app.config import settings
 from app.models import Outbox, Reservation, Room, RoomOpenHour, Seat, SeatStatusLog, Violation
-from campus_common.testing import NOW
+from campus_common.testing import NOW, user_headers
 from campus_common.timeutil import at_hour
 from sqlalchemy import func, select
 
@@ -57,36 +58,36 @@ def _create_body(name: str = "H3201", *, dept_id: int | None = None) -> dict:
     }
 
 
-def test_list_rooms_filters_department_and_disabled_for_students(client, db, as_student):
-    global_room = _room(db, name="GLOBAL")
-    own_dept = _room(db, name="OWN", dept_id=1)
-    _room(db, name="OTHER", dept_id=2)
-    _room(db, name="DISABLED", status="disabled")
-
-    response = client.get("/api/v1/seat/rooms", headers=as_student)
-
-    assert response.status_code == 200
-    assert {row["id"] for row in response.json()["items"]} == {global_room.id, own_dept.id}
-    assert response.json()["total"] == 2
+ALL_ROOMS = {"GLOBAL", "OWN", "OTHER", "DISABLED"}
 
 
-def test_room_manager_sees_all_rooms(client, db, as_room_admin):
-    rooms = [
-        _room(db, name="GLOBAL"),
-        _room(db, name="OTHER", dept_id=2),
-        _room(db, name="DISABLED", status="disabled"),
-    ]
+@pytest.mark.parametrize(
+    ("perms", "dept_id", "visible"),
+    [
+        (["seat:reserve"], 1, {"GLOBAL", "OWN"}),
+        (["seat:room_manage"], 1, ALL_ROOMS),
+        (["seat:stats"], None, ALL_ROOMS),
+        (["seat:checkin_code"], None, {"GLOBAL", "OWN", "OTHER"}),
+    ],
+)
+def test_room_visibility_is_the_same_for_list_detail_and_availability(client, db, perms, dept_id, visible):
+    rooms = {
+        "GLOBAL": _room(db, name="GLOBAL"),
+        "OWN": _room(db, name="OWN", dept_id=1),
+        "OTHER": _room(db, name="OTHER", dept_id=2),
+        "DISABLED": _room(db, name="DISABLED", status="disabled"),
+    }
+    headers = user_headers(settings, perms=perms, dept_id=dept_id)
 
-    response = client.get("/api/v1/seat/rooms", headers=as_room_admin)
-
-    assert response.status_code == 200
-    assert {row["id"] for row in response.json()["items"]} == {room.id for room in rooms}
-
-
-def test_room_detail_hides_other_department(client, db, as_student):
-    hidden = _room(db, name="OTHER", dept_id=2, seats=2)
-    response = client.get(f"/api/v1/seat/rooms/{hidden.id}", headers=as_student)
-    assert response.status_code == 404
+    listed = client.get("/api/v1/seat/rooms", headers=headers).json()
+    assert ({row["name"] for row in listed["items"]}, listed["total"]) == (visible, len(visible))
+    for name, room in rooms.items():
+        detail = client.get(f"/api/v1/seat/rooms/{room.id}", headers=headers)
+        availability = client.get(
+            f"/api/v1/seat/rooms/{room.id}/availability", params={"date": DAY.isoformat()}, headers=headers
+        )
+        expected = 200 if name in visible else 404
+        assert (name, detail.status_code, availability.status_code) == (name, expected, expected)
 
 
 def test_room_detail_returns_open_hours_and_seats(client, db, as_student):
@@ -361,6 +362,58 @@ def test_update_room_null_dept_opens_room_and_omitted_fields_stay(client, db, as
         "H3201",
         7,
     )
+
+
+@pytest.mark.parametrize("field", ["building", "name"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_room_building_and_name_must_not_be_blank(client, db, as_room_admin, field, value):
+    room = _room(db, name="H3201")
+
+    body = _create_body("H3301") | {field: value}
+    created = client.post("/api/v1/seat/rooms", json=body, headers=as_room_admin)
+    updated = client.patch(f"/api/v1/seat/rooms/{room.id}", json={field: value}, headers=as_room_admin)
+
+    assert (created.status_code, updated.status_code) == (422, 422)
+    assert db.scalar(select(func.count()).select_from(Room)) == 1
+
+
+def test_room_building_and_name_are_trimmed(client, db, as_room_admin):
+    body = _create_body(" H3301 ") | {"building": " 第三教学楼 "}
+
+    response = client.post("/api/v1/seat/rooms", json=body, headers=as_room_admin)
+
+    assert response.status_code == 201, response.text
+    assert (response.json()["building"], response.json()["name"]) == ("第三教学楼", "H3301")
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_seat_code_must_not_be_blank(client, db, as_room_admin, value):
+    room = _room(db, name="H3201")
+    response = client.post(f"/api/v1/seat/rooms/{room.id}/seats", json={"code": value}, headers=as_room_admin)
+    assert response.status_code == 422
+    assert db.scalar(select(func.count()).select_from(Seat)) == 0
+
+
+def test_seat_code_is_trimmed(client, db, as_room_admin):
+    room = _room(db, name="H3201")
+    seats = f"/api/v1/seat/rooms/{room.id}/seats"
+    response = client.post(seats, json={"code": " A-09 "}, headers=as_room_admin)
+    assert response.status_code == 201, response.text
+    assert response.json()["code"] == "A-09"
+
+
+def test_blank_names_stored_before_the_rule_still_read(client, db, as_room_admin):
+    room = _room(db, name="", seats=1)
+    room.building = " "
+    db.add(Seat(room_id=room.id, code=""))
+    db.commit()
+
+    listed = client.get("/api/v1/seat/rooms", headers=as_room_admin)
+    detail = client.get(f"/api/v1/seat/rooms/{room.id}", headers=as_room_admin)
+
+    assert (listed.status_code, detail.status_code) == (200, 200)
+    assert (listed.json()["items"][0]["building"], listed.json()["items"][0]["name"]) == (" ", "")
+    assert sorted(seat["code"] for seat in detail.json()["seats"]) == ["", "A-01"]
 
 
 def test_update_room_rejects_values_the_table_cannot_store(client, db, as_room_admin):

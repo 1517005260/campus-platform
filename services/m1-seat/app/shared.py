@@ -17,7 +17,7 @@ from campus_common.errors import AppError, not_found
 from campus_common.events import NotificationSend, Ref, ReservationCancelled
 from campus_common.outbox import add_event
 from campus_common.timeutil import at_hour
-from sqlalchemy import ColumnElement, Select, and_, exists, or_, select
+from sqlalchemy import ColumnElement, Select, and_, exists, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas as s
@@ -141,11 +141,17 @@ def seat_rules(user: CurrentUser, slot: s.HourRange, start_at: datetime, end_at:
     ]
 
 
-def room_visible(room: Room, user: CurrentUser) -> bool:
-    """教室对用户是否可见：管理员看全部；其他人只看启用且院系允许的教室。"""
-    if user.has("seat:room_manage"):
-        return True
-    return room.status == "enabled" and room.dept_id in (None, user.dept_id)
+def room_visible(user: CurrentUser) -> ColumnElement[bool]:
+    """教室列表、详情、可用性共用的可见性条件。
+
+    - seat:room_manage、seat:stats：全部教室，含停用的（维护主数据；统计含已停用教室的历史预约）；
+    - seat:checkin_code（教室屏幕）：所有院系的启用教室，屏幕不属于任何院系，却要为院系自习室出签到码；
+    - 其他人：启用且院系允许的教室。"""
+    if user.has("seat:room_manage") or user.has("seat:stats"):
+        return true()
+    if user.has("seat:checkin_code"):
+        return Room.status == "enabled"
+    return and_(Room.status == "enabled", dept_allows(user))
 
 
 async def lock_room(session: AsyncSession, room_id: int) -> None:

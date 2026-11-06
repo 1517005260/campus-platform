@@ -16,11 +16,11 @@ from tests.conftest import DAY, M2_KEY, M3_KEY
 pytestmark = pytest.mark.db
 
 
-def _seed_room(db, *, seats: int = 2) -> tuple[Room, list[Seat]]:
+def _seed_room(db, *, seats: int = 2, name: str = "H3106") -> tuple[Room, list[Seat]]:
     room = Room(
         building="第三教学楼",
         floor=1,
-        name="H3106",
+        name=name,
         type="classroom",
         capacity=60,
         is_study_room=True,
@@ -376,12 +376,18 @@ def test_service_cannot_use_another_modules_block_source(client, db, as_m2):
     assert response.json()["code"] == "BLOCK_SOURCE_FORBIDDEN"
 
 
-def test_internal_get_room_returns_open_hours(client, db, as_m3):
-    room, _ = _seed_room(db)
+def test_internal_get_room_returns_open_hours_and_all_seats(client, db, as_m3):
+    room, seats = _seed_room(db)
+    _seed_room(db, seats=1, name="H3107")  # 另一间教室的座位不在其中
+    seats[1].status = "disabled"
+    db.commit()
+
     response = client.get(f"/internal/v1/rooms/{room.id}", headers=as_m3)
+
     assert response.status_code == 200
     assert response.json()["id"] == room.id
     assert len(response.json()["open_hours"]) == 7
+    assert [seat["id"] for seat in response.json()["seats"]] == [seat.id for seat in seats]
 
 
 def test_internal_room_reservations_filters_active_and_overlapping(client, db, as_m2):
