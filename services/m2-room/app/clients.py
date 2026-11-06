@@ -3,13 +3,17 @@
 from datetime import datetime
 
 from campus_common.clients import idempotency_key
-from campus_common.clients.common import CommonClient, UserBrief
+from campus_common.clients.common import CommonClient, UserBrief, UserContact
 from campus_common.clients.m1 import M1BlockResult, M1Client, M1Room
 
 from app.config import settings
 
 m1 = M1Client(settings)
 common = CommonClient(settings)
+
+
+async def get_user(user_id: int) -> UserContact:
+    return await common.get_user(user_id)
 
 
 async def get_room(room_id: int) -> M1Room:

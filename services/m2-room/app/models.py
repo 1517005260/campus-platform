@@ -5,8 +5,8 @@ from typing import Any
 
 from campus_common.db import make_metadata
 from campus_common.infra_models import OutboxMixin, ParamMixin, TimestampMixin
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB, ExcludeConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import settings
@@ -33,6 +33,13 @@ class Application(TimestampMixin, Base):
     __tablename__ = "applications"
     __table_args__ = (
         CheckConstraint("end_at > start_at", name="time_order"),
+        ExcludeConstraint(
+            (text("room_id"), "="),
+            (text("tstzrange(start_at, end_at)"), "&&"),
+            name="no_application_overlap",
+            using="gist",
+            where=text("status IN ('pending', 'approved')"),
+        ),
         Index("ix_applications_status_deadline", "status", "deadline_at"),
         Index("ix_applications_room_time", "room_id", "start_at"),
     )
