@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { onMounted, ref } from "vue";
 
+import { promptText } from "@/core/dialogs";
 import { showError } from "@/core/http";
 
 import { commonApi, type DeptOut } from "../api";
@@ -21,20 +22,8 @@ async function load() {
   }
 }
 
-async function askName(title: string, current = ""): Promise<string | null> {
-  try {
-    const { value } = await ElMessageBox.prompt("院系名称", title, {
-      inputValue: current,
-      inputValidator: (v) => (v?.trim() ? true : "名称不能为空"),
-    });
-    return value.trim();
-  } catch {
-    return null; // 取消
-  }
-}
-
 async function create() {
-  const name = await askName("新建院系");
+  const name = await promptText("院系名称", "新建院系", { minLength: 1 });
   if (!name) return;
   try {
     await commonApi.POST("/api/v1/admin/depts", { body: { name } });
@@ -46,7 +35,7 @@ async function create() {
 }
 
 async function rename(d: DeptOut) {
-  const name = await askName("院系改名", d.name);
+  const name = await promptText("院系名称", "院系改名", { minLength: 1, inputValue: d.name });
   if (!name || name === d.name) return;
   try {
     await commonApi.PATCH("/api/v1/admin/depts/{dept_id}", { params: { path: { dept_id: d.id } }, body: { name } });
