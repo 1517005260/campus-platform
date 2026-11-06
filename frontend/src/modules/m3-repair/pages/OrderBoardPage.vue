@@ -3,12 +3,14 @@
  * 工单看板：调度员派单（指定维修工、截止时间、是否下架教室），
  * 维修工开始维修/完工，报修人视角看状态与升级情况。
  */
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { onMounted, reactive, ref, watch } from "vue";
 
 import PaginatedTable from "@/core/components/PaginatedTable.vue";
-import { bizIso, fmtTime } from "@/core/format";
+import { confirmAction } from "@/core/dialogs";
+import { bizIso, bizWallTime, fmtTime, isPastDate } from "@/core/format";
 import { showError } from "@/core/http";
+import { usePagedList } from "@/core/pagedList";
 import { useAuthStore } from "@/core/auth/store";
 
 import OrderDetailDialog from "./OrderDetailDialog.vue";
@@ -17,60 +19,32 @@ import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
 const auth = useAuthStore();
 
 /** ---- 列表与筛选 ---- */
-const items = ref<WorkOrder[]>([]);
-const loading = ref(false);
-const total = ref(0);
-const page = ref(1);
-const size = ref(10);
 const status = ref<WorkOrder["status"]>();
 const escalated = ref(false);
-
-async function load() {
-  loading.value = true;
-  try {
-    const { data } = await repairApi.GET("/api/v1/repair/orders", {
-      params: {
-        query: { status: status.value, escalated: escalated.value || undefined, page: page.value, size: size.value },
-      },
-    });
-    items.value = data!.items;
-    total.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    loading.value = false;
-  }
-}
+const { items, total, page, size, loading, load, reload } = usePagedList((p) =>
+  repairApi
+    .GET("/api/v1/repair/orders", {
+      params: { query: { status: status.value, escalated: escalated.value || undefined, ...p } },
+    })
+    .then((r) => r.data!),
+);
+watch([status, escalated], reload);
 
 const statusOptions = Object.entries(orderStatusLabel).map(([value, label]) => ({ value, label }));
+
+/** 开始维修、完工只有被指派的维修工能做（后端校验 NOT_ASSIGNEE） */
+const isAssignee = (o: WorkOrder) => o.assignee !== null && o.assignee.id === auth.user?.id;
 
 /** ---- 派单 ---- */
 const dispatching = ref<WorkOrder | null>(null);
 
-/** 业务时区的墙上时间（YYYY-MM-DDTHH:mm:ss），加指定小时后；作为选择器的值 */
-function wallTimeLater(hours: number): string {
-  const at = new Date(Date.now() + hours * 3600 * 1000);
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(at)
-      .map((part) => [part.type, part.value]),
-  );
-  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
-}
+/** 默认处理截止：24 小时后（业务时区墙上时间，作为选择器的值） */
+const defaultDeadline = () => bizWallTime(new Date(Date.now() + 24 * 3600 * 1000));
 
 const dispatchForm = reactive({
   assignee_id: undefined as number | undefined,
   blocks_room: false,
-  deadline: wallTimeLater(24),
+  deadline: defaultDeadline(),
 });
 const dispatchSubmitting = ref(false);
 
@@ -78,7 +52,7 @@ function openDispatch(o: WorkOrder) {
   dispatching.value = o;
   dispatchForm.assignee_id = undefined;
   dispatchForm.blocks_room = false;
-  dispatchForm.deadline = wallTimeLater(24);
+  dispatchForm.deadline = defaultDeadline();
 }
 
 async function dispatch() {
@@ -108,7 +82,7 @@ async function dispatch() {
 
 /** ---- 开始维修 / 完工 ---- */
 async function start(o: WorkOrder) {
-  await ElMessageBox.confirm(`开始维修工单 #${o.id}？`, "确认");
+  if (!(await confirmAction(`开始维修工单 #${o.id}？${o.blocks_room ? "教室将同时下架。" : ""}`))) return;
   try {
     await repairApi.POST("/api/v1/repair/orders/{order_id}/start", {
       params: { path: { order_id: o.id } },
@@ -166,12 +140,11 @@ function showDetail(o: WorkOrder) {
   detailVisible.value = true;
 }
 
-watch([page, size, status, escalated], () => void load());
 onMounted(load);
 </script>
 
 <template>
-  <el-form inline @submit.prevent="load" style="margin-bottom: 4px">
+  <el-form inline @submit.prevent="reload" style="margin-bottom: 4px">
     <el-form-item label="状态">
       <el-select v-model="status" clearable placeholder="全部" style="width: 130px">
         <el-option v-for="o in statusOptions" :key="o.value" :label="o.label" :value="o.value" />
@@ -215,7 +188,7 @@ onMounted(load);
           派单
         </el-button>
         <el-button
-          v-if="auth.can('repair:work') && row.status === 'dispatched'"
+          v-if="row.status === 'dispatched' && isAssignee(row)"
           size="small"
           type="primary"
           @click="start(row)"
@@ -223,7 +196,7 @@ onMounted(load);
           开始维修
         </el-button>
         <el-button
-          v-if="auth.can('repair:work') && row.status === 'in_progress'"
+          v-if="row.status === 'in_progress' && isAssignee(row)"
           size="small"
           type="success"
           @click="openComplete(row)"
@@ -246,7 +219,13 @@ onMounted(load);
         <span class="hint">拥有维修权限的用户编号</span>
       </el-form-item>
       <el-form-item label="处理截止" required>
-        <el-date-picker v-model="dispatchForm.deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" />
+        <el-date-picker
+          v-model="dispatchForm.deadline"
+          type="datetime"
+          value-format="YYYY-MM-DDTHH:mm:ss"
+          :clearable="false"
+          :disabled-date="isPastDate"
+        />
       </el-form-item>
       <el-form-item label="下架教室">
         <el-switch v-model="dispatchForm.blocks_room" />

@@ -6,6 +6,9 @@ import { orderStatusLabel, timelineActionLabel, type WorkOrder } from "../api";
 
 const visible = defineModel<boolean>({ required: true });
 defineProps<{ order: WorkOrder | null }>();
+
+/** 只把 http(s) 链接渲染成可点击的链接，其他内容（如 javascript:）按文本显示 */
+const isWebLink = (url: string) => /^https?:\/\//i.test(url);
 </script>
 
 <template>
@@ -28,7 +31,10 @@ defineProps<{ order: WorkOrder | null }>();
         <el-descriptions-item label="升级次数">{{ order.escalation_level }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ order.description }}</el-descriptions-item>
         <el-descriptions-item v-if="order.photos.length > 0" label="照片" :span="2">
-          <a v-for="p in order.photos" :key="p" :href="p" target="_blank" class="photo">{{ p }}</a>
+          <template v-for="p in order.photos" :key="p">
+            <a v-if="isWebLink(p)" :href="p" target="_blank" rel="noopener noreferrer" class="photo">{{ p }}</a>
+            <span v-else class="photo">{{ p }}</span>
+          </template>
         </el-descriptions-item>
         <el-descriptions-item label="评分">
           {{ order.rating !== null ? `${order.rating} / 5` : "未评价" }}
@@ -41,9 +47,11 @@ defineProps<{ order: WorkOrder | null }>();
             v-for="(t, i) in order.timeline"
             :key="i"
             :timestamp="fmtTime(t.at)"
-            :type="t.action === 'accept' ? 'success' : t.action === 'reject_acceptance' ? 'danger' : 'primary'"
+            :type="
+              ['accept', 'admin_accept'].includes(t.action) ? 'success' : t.action === 'reject' ? 'danger' : 'primary'
+            "
           >
-            {{ timelineActionLabel[t.action] ?? t.action }} · {{ t.actor ? t.actor.name : "系统" }}
+            {{ timelineActionLabel[t.action] }} · {{ t.actor ? t.actor.name : "系统" }}
             <span v-if="t.from_status || t.to_status" class="transition">
               （{{ t.from_status ? orderStatusLabel[t.from_status] : "—" }} →
               {{ t.to_status ? orderStatusLabel[t.to_status] : "—" }}）
@@ -59,8 +67,10 @@ defineProps<{ order: WorkOrder | null }>();
 <style scoped>
 .photo {
   display: block;
-  color: var(--el-color-primary);
   word-break: break-all;
+}
+a.photo {
+  color: var(--el-color-primary);
 }
 .transition {
   color: var(--el-text-color-secondary);
