@@ -2,7 +2,7 @@
 
 import pytest
 from app.consumers import handle_audit, handle_notification
-from app.models import AuditLog, Notification, Role, User
+from app.models import AuditLog, Dept, Notification, Role, User
 from app.seed import BOOTSTRAP_ADMIN, seed_base
 from campus_common.events import AuditRecord, Envelope, NotificationSend
 from sqlalchemy import func, select
@@ -91,7 +91,7 @@ async def test_unknown_template_or_missing_params_still_stored(db, template, par
     assert n.title == template and str(next(iter(params.values()))) in n.content
 
 
-def _user(db, user_id: int, role: str, *, active: bool = True) -> None:
+def _user(db, user_id: int, role: str, *, active: bool = True, dept_id: int | None = None) -> None:
     db.add(
         User(
             id=user_id,
@@ -99,6 +99,7 @@ def _user(db, user_id: int, role: str, *, active: bool = True) -> None:
             password_hash="x",
             name=f"用户{user_id}",
             active=active,
+            dept_id=dept_id,
             roles=[db.get(Role, role)],
         )
     )
@@ -119,6 +120,25 @@ async def test_perm_addressed_notification_reaches_active_holders_once(db):
     # repair:manage：调度员 50 与系统管理员；停用的 51 不收；50 同时在 user_ids 中也只收一条
     recipients = db.scalars(select(Notification.user_id).order_by(Notification.user_id)).all()
     assert recipients == sorted([50, 52, BOOTSTRAP_ADMIN.id])
+
+
+async def test_perm_addressed_notification_with_dept_reaches_only_that_departments_holders(db):
+    db.add_all([Dept(id=1, name="院系一"), Dept(id=2, name="院系二")])
+    _user(db, 60, "dept_approver", dept_id=1)
+    _user(db, 61, "dept_approver", dept_id=2)
+    _user(db, 62, "dept_approver", dept_id=1, active=False)
+    _user(db, 63, "student", dept_id=1)
+    payload = NotificationSend(user_ids=[63], perm="room:approve", dept_id=1, template="x", params={})
+    await handle_notification(envelope(payload))
+    # 院系 1 的启用审批人 60；院系 2 的 61 与无院系的系统管理员不收；user_ids 照常送达
+    assert db.scalars(select(Notification.user_id).order_by(Notification.user_id)).all() == [60, 63]
+
+
+async def test_dept_without_perm_only_reaches_listed_users(db):
+    db.add(Dept(id=1, name="院系一"))
+    _user(db, 60, "dept_approver", dept_id=1)
+    await handle_notification(envelope(NotificationSend(user_ids=[1], dept_id=1, template="x", params={})))
+    assert db.scalars(select(Notification.user_id)).all() == [1]
 
 
 ORDER = {"order_id": 7, "category": "空调"}

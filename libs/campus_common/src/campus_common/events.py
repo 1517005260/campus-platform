@@ -43,6 +43,10 @@ class NotificationSend(BaseModel):
         description="另外通知拥有该权限码的全部启用用户（common 处理消息时解析），"
         "例如超时升级通知 repair:manage；发送方因此不必为查收件人调用 common",
     )
+    dept_id: int | None = Field(
+        None,
+        description="与 perm 一起使用：只通知该院系中拥有 perm 的用户，例如院系级审批人；没有 perm 时忽略",
+    )
     template: str = Field(description="通知模板编码，例如 seat.remind_before")
     params: dict[str, Any] = Field(default_factory=dict, description="模板参数")
     channels: list[Literal["inapp", "email"]] = ["inapp", "email"]
