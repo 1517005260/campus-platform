@@ -3,7 +3,7 @@
 from typing import Literal
 
 from campus_common.timeutil import TimeRangeModel
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 ApplicationStatus = Literal["pending", "approved", "rejected", "withdrawn", "expired", "cancelled"]
 
@@ -73,9 +73,22 @@ class ApprovalFlow(BaseModel):
     priority: int = 0
     levels: list[FlowLevel] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def levels_are_sequential(self):
+        expected = list(range(1, len(self.levels) + 1))
+        if [level.level for level in self.levels] != expected:
+            raise ValueError("审批级别必须从 1 开始连续且按顺序排列")
+        return self
+
 
 class RoomSettings(BaseModel):
     max_violations: int = Field(3, ge=0, description="近 violation_window_days 天违约达到该次数不能申请")
     violation_window_days: int = Field(30, ge=1)
     advance_days_min: int = Field(1, ge=0, description="至少提前几天申请")
     advance_days_max: int = Field(30, ge=1, description="最多提前几天申请")
+
+    @model_validator(mode="after")
+    def valid_advance_window(self):
+        if self.advance_days_max < self.advance_days_min:
+            raise ValueError("advance_days_max 不能小于 advance_days_min")
+        return self
