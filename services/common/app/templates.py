@@ -25,8 +25,13 @@ def fmt_time(value: Any) -> str:
 
 
 def _slot(p: dict[str, Any]) -> str:
+    """时段，如 11月6日 14:00–16:00；结束不在同一天时写出结束日期，如 11月6日 22:00–11月7日 08:00。"""
     start = fmt_time(p["start_at"])
-    return f"{start}–{fmt_time(p['end_at'])[-5:]}" if "end_at" in p else start
+    if "end_at" not in p:
+        return start
+    end = fmt_time(p["end_at"])
+    same_day = start.split(" ")[0] == end.split(" ")[0]
+    return f"{start}–{end.split(' ')[-1] if same_day else end}"
 
 
 Renderer = Callable[[dict[str, Any]], tuple[str, str]]
@@ -53,6 +58,10 @@ _REPAIR_STATUS = {"dispatched": "已派单、待开始维修", "in_progress": "�
 
 def _order(p: dict[str, Any]) -> str:
     return f"报修工单 #{p['order_id']}（{p['category']}）"
+
+
+def _application(p: dict[str, Any]) -> str:
+    return f"整教室申请 #{p['application_id']}（{p['room']}，{_slot(p)}，用途：{p['purpose']}）"
 
 
 TEMPLATES: dict[str, Renderer] = {
@@ -110,6 +119,41 @@ TEMPLATES: dict[str, Renderer] = {
         "报修工单超时升级",
         f"{_order(p)}自 {fmt_time(p['since'])} 起处于“{_REPAIR_STATUS[p['status']]}”状态，"
         f"每超过 {p['timeout_hours']} 小时升级一次，现已升级到第 {p['level']} 级，请督办。",
+    ),
+    "room.application_submitted": lambda p: (
+        "新的整教室申请待审批",
+        f"{p['applicant']} 提交了{_application(p)}，参加 {p['attendees']} 人，请进行第 {p['level']} 级审批。",
+    ),
+    "room.approval_requested": lambda p: (
+        "整教室申请待你审批",
+        f"{p['applicant']} 的{_application(p)}，参加 {p['attendees']} 人，"
+        f"已通过第 {p['level'] - 1} 级审批，请进行第 {p['level']} 级审批。",
+    ),
+    "room.level_approved": lambda p: (
+        "整教室申请通过一级审批",
+        f"你的{_application(p)}已通过第 {p['level']} 级审批，正在等待第 {p['next_level']} 级审批。",
+    ),
+    "room.application_approved": lambda p: (
+        "整教室申请已批准",
+        f"你的{_application(p)}已通过全部审批，教室已在该时段为你占用。",
+    ),
+    "room.application_rejected": lambda p: (
+        "整教室申请被驳回",
+        f"你的{_application(p)}在第 {p['level']} 级审批被驳回。"
+        f"{'审批意见：' + p['comment'] if p.get('comment') else '审批人未填写意见。'}",
+    ),
+    "room.application_withdrawn": lambda p: (
+        "整教室申请已撤回",
+        f"{p['applicant']} 撤回了{_application(p)}，第 {p['level']} 级审批无需再处理。",
+    ),
+    "room.application_cancelled": lambda p: (
+        "已批准的整教室申请被取消",
+        f"{p['applicant']} 取消了你审批通过的{_application(p)}，教室占用已释放。",
+    ),
+    "room.application_expired": lambda p: (
+        "整教室申请已超时失效",
+        f"你的{_application(p)}在第 {p['level']} 级审批超过处理时限，已自动失效。"
+        "如仍需使用教室，请重新提交申请。",
     ),
     "common.roles_changed": lambda p: (
         "你的角色已变更",
