@@ -30,7 +30,8 @@ async def handle_notification(envelope: Envelope) -> None:
             return
         recipients = set(payload.user_ids)
         if payload.perm is not None:
-            recipients.update(user.id for user in await session.scalars(perm_holders(payload.perm)))
+            holders = await session.scalars(perm_holders(payload.perm, payload.dept_id))
+            recipients.update(user.id for user in holders)
         ref = payload.ref.model_dump() if payload.ref else None
         session.add_all(
             new_notification(uid, payload.template, payload.params, channels=payload.channels, ref=ref)
