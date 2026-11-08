@@ -141,7 +141,7 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 | `room.application_rejected` | 整教室申请被驳回 | 公共参数、level、comment（可为空，为空时写明审批人未填写意见） |
 | `room.application_withdrawn` | 整教室申请已撤回 | 公共参数、applicant、level |
 | `room.application_cancelled` | 已批准的整教室申请被取消 | 公共参数、applicant |
-| `room.application_expired` | 整教室申请已超时失效 | 公共参数、level |
+| `room.application_expired` | 整教室申请已超时失效；按 cause 区分：`deadline` 当前级别超过审批时限，`started` 申请时段开始时仍未审批完成 | 公共参数、level、cause |
 
 `room.*` 的公共参数：application_id、room（"楼宇 名称"）、purpose、start_at、end_at；applicant 为申请人姓名。时段结束不在同一天时写出结束日期（如"11月6日 22:00–11月7日 08:00"）。
 

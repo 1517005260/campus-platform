@@ -152,8 +152,13 @@ TEMPLATES: dict[str, Renderer] = {
     ),
     "room.application_expired": lambda p: (
         "整教室申请已超时失效",
-        f"你的{_application(p)}在第 {p['level']} 级审批超过处理时限，已自动失效。"
-        "如仍需使用教室，请重新提交申请。",
+        f"你的{_application(p)}"
+        + (
+            f"在申请时段开始前仍停留在第 {p['level']} 级审批，已自动失效。"
+            if p["cause"] == "started"
+            else f"在第 {p['level']} 级审批超过处理时限，已自动失效。"
+        )
+        + "如仍需使用教室，请重新提交申请。",
     ),
     "common.roles_changed": lambda p: (
         "你的角色已变更",
