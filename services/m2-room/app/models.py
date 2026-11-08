@@ -47,7 +47,13 @@ class Application(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     applicant_id: Mapped[int] = mapped_column(Integer, index=True)
     applicant_dept_id: Mapped[int | None] = mapped_column(Integer)
+    # 提交时从登录凭证记下的申请人显示信息，读接口不调用 common
+    applicant_username: Mapped[str] = mapped_column(String(50), server_default="")
+    applicant_name: Mapped[str] = mapped_column(String(50), server_default="")
     room_id: Mapped[int] = mapped_column(Integer)
+    room_name: Mapped[str] = mapped_column(
+        String(110), server_default=""
+    )  # 提交时 M1 的"楼宇 名称"，用于通知
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     purpose: Mapped[str] = mapped_column(Text)
@@ -59,6 +65,9 @@ class Application(TimestampMixin, Base):
     current_level: Mapped[int] = mapped_column(Integer, default=1)
     deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # 当前级别审批截止
     m1_block_id: Mapped[int | None] = mapped_column(Integer)  # 审批通过后 M1 返回的占用 ID
+    # 最近一次请求 M1 占用的时间；非空表示 M1 可能持有本申请的占用（approved 时持有，释放后清空）。
+    # 未通过就结束的申请若非空，由 jobs.release_leftover_blocks 释放
+    occupy_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(Integer, default=1)  # 乐观锁
 
     __mapper_args__ = {"version_id_col": version}
@@ -71,6 +80,10 @@ class ApprovalRecord(Base):
     application_id: Mapped[int] = mapped_column(ForeignKey("applications.id"), index=True)
     level: Mapped[int] = mapped_column(Integer)
     approver_id: Mapped[int | None] = mapped_column(Integer)  # 系统动作（超时）为空
+    # 动作发生时从登录凭证记下的操作人显示信息
+    approver_username: Mapped[str | None] = mapped_column(String(50))
+    approver_name: Mapped[str | None] = mapped_column(String(50))
+    approver_dept_id: Mapped[int | None] = mapped_column(Integer)
     action: Mapped[str] = mapped_column(String(20))  # approve | reject | expire | withdraw | cancel
     comment: Mapped[str | None] = mapped_column(Text)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

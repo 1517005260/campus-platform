@@ -12,15 +12,17 @@ from app import schemas as s
 router = APIRouter(prefix="/api/v1/room", tags=["审批与配置"], responses=ERROR_RESPONSES)
 
 Approver = CurrentUser
+APPROVER_PERMS = ("room:approve", "room:approve_school")
 
 
 @router.get("/approvals/todo", summary="我的待审批", response_model=Page[s.ApplicationForApprover])
 async def todo(
     session: SessionDep,
-    user: Approver = Depends(require_perm("room:approve")),
+    user: Approver = Depends(require_perm(*APPROVER_PERMS)),
     p: PageParams = Depends(page_params),
 ):
-    """当前级别 scope=dept 时只列出申请人与审批人同院系的申请。"""
+    """当前用户此刻能通过或驳回的申请（与审批时的检查是同一组条件），按截止时间排序。
+    affected_reservations 逐条向 M1 查询，失败时为空。"""
     return await room_service.todo(session, user, p)
 
 
@@ -29,11 +31,17 @@ async def approve(
     application_id: int,
     body: s.ApprovalAction,
     session: SessionDep,
-    user: Approver = Depends(require_perm("room:approve")),
+    user: Approver = Depends(require_perm(*APPROVER_PERMS)),
 ):
-    """非最后一级：进入下一级并刷新 deadline_at。
-    最后一级：调用 M1 POST /internal/v1/blocks 占用教室，成功后才把状态改为 approved；
-    M1 调用失败则本地不变，返回 502。"""
+    """非最后一级：进入下一级并刷新 deadline_at，通知申请人与下一级审批人。
+    最后一级：调用 M1 POST /internal/v1/blocks 占用教室（原因为申请用途），成功后才改为 approved。错误码：
+
+    - 404 NOT_FOUND：看不到该申请
+    - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
+    - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
+    - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
+    - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR 或 M1 的 409 业务错误：占用失败，申请保持 pending，可重试
+    """
     return await room_service.approve(session, user, application_id, body)
 
 
@@ -42,8 +50,15 @@ async def reject(
     application_id: int,
     body: s.ApprovalAction,
     session: SessionDep,
-    user: Approver = Depends(require_perm("room:approve")),
+    user: Approver = Depends(require_perm(*APPROVER_PERMS)),
 ):
+    """任一级驳回 → rejected，通知申请人（含级别与意见）。错误码：
+
+    - 404 NOT_FOUND：看不到该申请
+    - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
+    - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
+    - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
+    """
     return await room_service.reject(session, user, application_id, body)
 
 
@@ -54,11 +69,13 @@ async def get_flows(session: SessionDep, user=Depends(require_perm("room:flow_ma
 
 @router.put("/flows", summary="更新审批流配置", response_model=list[s.ApprovalFlow])
 async def put_flows(
-    body: list[s.ApprovalFlow],
+    body: s.FlowList,
     session: SessionDep,
     user=Depends(require_perm("room:flow_manage")),
 ):
-    """只影响之后提交的申请，在途申请使用提交时的快照。"""
+    """整体替换，只影响之后提交的申请（在途申请使用提交时的快照）。
+    至少一条；每级 approver_perm 须与 scope 对应（dept → room:approve，school → room:approve_school），
+    否则 422 VALIDATION_ERROR；名称重复 409 DUPLICATE_FLOW_NAME。"""
     return await room_service.put_flows(session, body)
 
 
@@ -76,4 +93,5 @@ async def put_settings(
     session: SessionDep,
     user=Depends(require_perm("room:flow_manage")),
 ):
+    """advance_days_max 小于 advance_days_min 等校验失败时 422 VALIDATION_ERROR。"""
     return await room_service.put_settings(session, body)

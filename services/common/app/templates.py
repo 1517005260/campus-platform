@@ -26,7 +26,11 @@ def fmt_time(value: Any) -> str:
 
 def _slot(p: dict[str, Any]) -> str:
     start = fmt_time(p["start_at"])
-    return f"{start}–{fmt_time(p['end_at'])[-5:]}" if "end_at" in p else start
+    if "end_at" not in p:
+        return start
+    end = fmt_time(p["end_at"])
+    # 整教室申请可能跨天，结束日期不同时写全
+    return f"{start}–{end[-5:] if end[:-6] == start[:-6] else end}"
 
 
 Renderer = Callable[[dict[str, Any]], tuple[str, str]]
@@ -78,32 +82,32 @@ TEMPLATES: dict[str, Renderer] = {
     "seat.reservation_cancelled_by_admin": lambda p: _ADMIN_CANCEL[p["cause"]](_slot(p)),
     "room.application_submitted": lambda p: (
         "新的整教室申请待审批",
-        f"整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）已提交，"
+        f"整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）已提交，"
         f"请完成第 {p['level']} 级审批。",
     ),
     "room.approval_requested": lambda p: (
         "整教室申请进入下一审批级",
-        f"整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）等待第 {p['level']} 级审批。",
+        f"整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）等待第 {p['level']} 级审批。",
     ),
     "room.application_approved": lambda p: (
         "整教室申请已通过",
-        f"你的整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）已通过。",
+        f"你的整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）已通过。",
     ),
     "room.application_rejected": lambda p: (
         "整教室申请被驳回",
-        f"你的整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）未通过审批。",
+        f"你的整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）未通过审批。",
     ),
     "room.application_withdrawn": lambda p: (
         "整教室申请已撤回",
-        f"你的整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）已撤回。",
+        f"你的整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）已撤回。",
     ),
     "room.application_cancelled": lambda p: (
         "整教室预约已取消",
-        f"你的整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）已取消，教室占用已释放。",
+        f"你的整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）已取消，教室占用已释放。",
     ),
     "room.application_expired": lambda p: (
         "整教室申请审批超时",
-        f"你的整教室申请 #{p['application_id']}（{p['purpose']}，{_slot(p)}）"
+        f"你的整教室申请 #{p['application_id']}（{p['room']}，{p['purpose']}，{_slot(p)}）"
         f"在第 {p['level']} 级审批超时，已自动撤销。",
     ),
     "repair.reported": lambda p: (

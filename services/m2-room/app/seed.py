@@ -13,8 +13,8 @@ DEFAULT_FLOWS = [
     FlowIn(
         name="默认两级审批",
         levels=[
-            FlowLevel(level=1, scope="dept", timeout_hours=48),
-            FlowLevel(level=2, scope="school", timeout_hours=48),
+            FlowLevel(level=1, scope="dept", approver_perm="room:approve", timeout_hours=48),
+            FlowLevel(level=2, scope="school", approver_perm="room:approve_school", timeout_hours=48),
         ],
     )
 ]
@@ -25,7 +25,10 @@ def seed_base(session) -> None:
     for flow in DEFAULT_FLOWS:
         session.execute(
             insert(ApprovalFlow)
-            .values(**flow.model_dump(exclude={"levels"}), levels=[lv.model_dump() for lv in flow.levels])
+            .values(
+                **flow.model_dump(exclude={"levels"}),
+                levels=[lv.model_dump(mode="json") for lv in flow.levels],
+            )
             .on_conflict_do_nothing(index_elements=["name"])
         )
 
