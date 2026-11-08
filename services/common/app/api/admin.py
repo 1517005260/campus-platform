@@ -110,7 +110,9 @@ async def list_permissions(session: SessionDep, user: CurrentUser = ADMIN_ROLE):
 @router.get("/depts", summary="院系列表", response_model=list[s.DeptOut])
 async def list_depts(
     session: SessionDep,
-    user: CurrentUser = Depends(require_perm("admin:user", "room:approve", "seat:room_manage")),
+    user: CurrentUser = Depends(
+        require_perm("admin:user", "room:approve", "room:approve_school", "seat:room_manage")
+    ),
 ):
     """按 ID 升序。"""
     return await rbac.list_depts(session)
