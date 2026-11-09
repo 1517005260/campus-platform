@@ -67,7 +67,7 @@ class M1Client:
     def __init__(self, settings: ServiceSettings):
         self._settings = settings
         self.stub_enabled = settings.stub_clients  # 为真时返回桩数据、不发网络请求
-        self._http = ServiceClient(settings.m1_url, settings)
+        self._http = ServiceClient(settings.m1_url, settings, "M1 自习座位服务")
 
     async def get_room(self, room_id: int) -> M1Room:
         if self.stub_enabled:
