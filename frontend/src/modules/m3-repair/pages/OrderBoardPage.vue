@@ -11,12 +11,14 @@ import { confirmAction } from "@/core/dialogs";
 import { bizIso, bizWallTime, fmtTime, isPastDate } from "@/core/format";
 import { showError } from "@/core/http";
 import { usePagedList } from "@/core/pagedList";
+import { useRooms } from "@/core/rooms";
 import { useAuthStore } from "@/core/auth/store";
 
 import OrderDetailDialog from "./OrderDetailDialog.vue";
 import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
 
 const auth = useAuthStore();
+const { load: loadRooms, nameOf } = useRooms();
 
 /** ---- 列表与筛选 ---- */
 const status = ref<WorkOrder["status"]>();
@@ -140,7 +142,10 @@ function showDetail(o: WorkOrder) {
   detailVisible.value = true;
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadRooms();
+});
 </script>
 
 <template>
@@ -159,7 +164,9 @@ onMounted(load);
   <PaginatedTable :data="items" :loading="loading" :total="total" v-model:page="page" v-model:size="size">
     <el-table-column label="工单号" prop="id" width="80" />
     <el-table-column label="报修人" prop="reporter.name" width="100" />
-    <el-table-column label="教室" prop="room_id" width="80" />
+    <el-table-column label="教室" width="160">
+      <template #default="{ row }">{{ nameOf(row.room_id) }}</template>
+    </el-table-column>
     <el-table-column label="分类" prop="category" width="90" />
     <el-table-column label="维修人" width="100">
       <template #default="{ row }">{{ row.assignee?.name ?? "—" }}</template>
@@ -258,7 +265,11 @@ onMounted(load);
     </template>
   </el-dialog>
 
-  <OrderDetailDialog v-model="detailVisible" :order="detailOrder" />
+  <OrderDetailDialog
+    v-model="detailVisible"
+    :order="detailOrder"
+    :room-name="detailOrder ? nameOf(detailOrder.room_id) : ''"
+  />
 </template>
 
 <style scoped>
