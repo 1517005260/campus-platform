@@ -357,6 +357,21 @@ def test_dispatch_deadline_must_be_in_future(
         assert resp.json()["code"] == "DEADLINE_NOT_FUTURE"
 
 
+def test_dispatch_deadline_given_in_utc_is_returned_in_business_time_zone(
+    client, db, as_reporter, as_dispatcher, common_calls
+):
+    order_id = report(client, as_reporter)
+    resp = client.post(
+        f"{ORDERS}/{order_id}/dispatch",
+        json={"assignee_id": WORKER_ID, "deadline_at": "2026-10-20T10:00:00Z", "blocks_room": False},
+        headers=as_dispatcher,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["deadline_at"] == "2026-10-20T18:00:00+08:00"
+    (dispatched,) = notices(db, "repair.dispatched")
+    assert dispatched["params"]["deadline_at"] == "2026-10-20T18:00:00+08:00"
+
+
 def test_dispatch_only_from_submitted(client, db, as_reporter, as_dispatcher, common_calls):
     order_id = report(client, as_reporter)
     assert dispatch(client, as_dispatcher, order_id).status_code == 200
