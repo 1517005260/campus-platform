@@ -23,7 +23,9 @@ const { items, total, page, size, loading, load } = usePagedList((p) =>
 function approveTip(row: ApplicationForApprover): string {
   const final = row.current_level === row.total_levels;
   if (!final) return `通过第 ${row.current_level} 级审批，进入下一级？（可填审批意见）`;
-  const affected = row.affected_reservations > 0 ? `，该时段 ${row.affected_reservations} 条座位预约将被取消` : "";
+  const n = row.affected_reservations;
+  const affected =
+    n === null ? "，该时段受影响的座位预约数暂时无法查询" : n > 0 ? `，该时段 ${n} 条座位预约将被取消` : "";
   return `这是最后一级审批，通过后将占用教室${affected}。（可填审批意见）`;
 }
 
@@ -65,7 +67,8 @@ onMounted(() => {
     <el-table-column label="用途" prop="purpose" show-overflow-tooltip />
     <el-table-column label="影响预约" width="90">
       <template #default="{ row }">
-        <el-tag v-if="row.affected_reservations > 0" size="small" type="warning">
+        <span v-if="row.affected_reservations === null">暂无法查询</span>
+        <el-tag v-else-if="row.affected_reservations > 0" size="small" type="warning">
           {{ row.affected_reservations }} 条
         </el-tag>
         <span v-else>无</span>
