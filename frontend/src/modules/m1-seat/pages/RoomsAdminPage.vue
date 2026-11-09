@@ -112,7 +112,12 @@ async function saveRoom() {
   if (!(await formRef.value?.validate().catch(() => false))) return;
   const body = { ...form, building: form.building.trim(), name: form.name.trim() };
   const deregisters = editing.value?.is_study_room && !form.is_study_room;
-  if (deregisters && !(await confirmAction(`取消 ${editing.value!.name} 的"作为自习室"？${CANCELS_RESERVATIONS}`))) {
+  if (
+    deregisters &&
+    !(await confirmAction(`取消 ${editing.value!.name} 的"作为自习室"？${CANCELS_RESERVATIONS}`, {
+      action: "取消自习室",
+    }))
+  ) {
     return;
   }
   saving.value = true;
