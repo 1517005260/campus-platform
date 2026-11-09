@@ -129,7 +129,7 @@ stateDiagram-v2
 
 1. 加载申请（看不到则 404），按 `turn_rules()` 检查：pending、截止与开始时间未到、不是申请人、符合当前级别的权限码与范围、没有审批过其他级别。
 2. 记下 `occupy_requested_at = now` 并提交。与它读到同一版本的另一次最终审批、驳回或撤回，谁后提交谁因 `version` 冲突返回 409；本次审批后提交时不会调用 M1。另一次最终审批若在这次提交之后才读取申请（仍是 pending），也会走到第 3 步调用 M1，但幂等键相同，M1 返回同一个占用，第 4 步只有一方成功。提交之后的 `RELEASE_GRACE`（1 分钟）内视为占用请求可能在途：驳回、撤回返回 409 `OCCUPY_IN_PROGRESS`，超时撤销跳过该申请；否则 M1 随后完成占用并取消学生预约，申请却已结束，残留占用虽会被释放，被取消的预约不会恢复。
-3. 调用 `occupy_room`。失败 → 申请仍是 pending（审批人可重试），错误原样返回：M1 不可达或拒绝调用 502，M1 的业务错误（如教室已被占用 409）原样返回。
+3. 调用 `occupy_room`。失败 → 申请仍是 pending（审批人可重试），错误原样返回：M1 不可达或拒绝调用 502，M1 的业务错误（如教室正在维修 409 `ROOM_UNDER_MAINTENANCE`）原样返回；业务错误说明占用没有建立，同时清除 `occupy_requested_at`，驳回、撤回不必等待。
 4. 在一个事务里：status=approved、写 `approval_records`、保存 `m1_block_id`、outbox 通知申请人、发 `m2.application.status_changed`。`version` 冲突时返回 409 `APPLICATION_STATE_CONFLICT`，不在请求里补偿：若对方是另一次成功的最终审批，占用属于它，不能释放；若对方使申请结束（驳回、撤回、超时），由 `release_leftover_blocks` 释放。补偿因此不会掩盖原始错误，也不会误释放别人的占用。
 
 ### 取消已通过的申请

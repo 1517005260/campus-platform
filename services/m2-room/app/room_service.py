@@ -16,6 +16,7 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import Iterable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -256,7 +257,16 @@ async def approve(
     # 由 jobs.release_leftover_blocks 释放可能已建立的占用；并发的另一次最终审批成功时占用属于它，不能释放。
     application.occupy_requested_at = at
     await _commit(session)
-    occupied = await clients.occupy_room(application)
+    try:
+        occupied = await clients.occupy_room(application)
+    except AppError as exc:
+        if exc.status < 500:
+            # M1 明确拒绝（如教室维修中），占用没有建立：清除请求时间，驳回、撤回不必等待。
+            # 清除失败（申请已被并发修改）不影响结果，仍返回 M1 的原始错误。
+            application.occupy_requested_at = None
+            with suppress(AppError):
+                await _commit(session)
+        raise
     transition(session, application, "approve", "approved", at, actor=user, comment=body.comment)
     application.m1_block_id = occupied.block_id
     notify(session, application, "room.application_approved", user_ids=[application.applicant_id])

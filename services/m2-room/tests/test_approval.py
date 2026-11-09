@@ -269,7 +269,7 @@ def test_concurrent_final_approvers_conflict_before_calling_m1(
 def test_m1_business_error_passed_through_and_application_stays_pending(
     client, db, as_applicant, as_dept_approver, as_school_approver, monkeypatch
 ):
-    """M1 拒绝占用（教室正在维修）：错误码与说明原样返回，申请仍待最后一级审批。"""
+    """M1 拒绝占用（教室正在维修）：错误码与说明原样返回，申请仍待最后一级审批，且可立即驳回。"""
     application_id = submit(client, as_applicant)
     act(client, application_id, "approve", as_dept_approver)
 
@@ -285,6 +285,9 @@ def test_m1_business_error_passed_through_and_application_stays_pending(
     )
     application = stored(db, application_id)
     assert (application.status, application.current_level) == ("pending", 2)
+    # M1 明确拒绝时占用没有建立，驳回不必等待
+    assert application.occupy_requested_at is None
+    assert act(client, application_id, "reject", as_school_approver).status_code == 200
 
 
 def _end_request(client, application_id, action, as_applicant, as_school_approver):
