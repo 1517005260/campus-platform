@@ -66,13 +66,15 @@ interface FieldError {
   msg: string;
 }
 
-/** details 转成一行说明：字符串原样显示；字段错误列表显示为"字段：原因"，字段路径去掉 body/query/path 前缀。 */
+/** details 转成一行说明：字符串（或字符串列表，如资格不满足的原因）原样显示；字段错误列表显示为"字段：原因"，
+ * 字段路径去掉 body/query/path 前缀。 */
 function detailText(details: unknown): string {
   if (typeof details === "string") return details;
   if (!Array.isArray(details)) return "";
-  return (details as FieldError[])
-    .filter((d) => typeof d?.msg === "string")
+  return (details as (string | FieldError)[])
+    .filter((d) => typeof d === "string" || typeof d?.msg === "string")
     .map((d) => {
+      if (typeof d === "string") return d;
       const field = (d.loc ?? []).slice(1).join(".");
       const msg = d.msg.replace(/^Value error, /, "");
       return field ? `${field}：${msg}` : msg;
