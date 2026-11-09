@@ -13,8 +13,9 @@
 
 ## 与 M1 的交互
 
-- 只通过 `app/clients.py` 调用 M1 和 common，路由里不要直接写 HTTP 请求；`clients.py` 基于 `campus_common.clients`，只写业务语义。
-- 最终通过：先记下 `occupy_requested_at` 并提交（并发审批在此冲突），再 `occupy_room`，成功后在一个事务里改为 approved。本地事务因 `version` 冲突失败时只返回 409，不在请求里释放：对方是成功的最终审批时占用属于它（同一幂等键），对方使申请结束时由 `release_leftover_blocks` 释放。测试覆盖并发两次审批、占用期间被超时撤销。
+- M2 只调用 M1，不调用 common。只通过 `app/clients.py` 调用，路由里不要直接写 HTTP 请求；`clients.py` 基于 `campus_common.clients`，只写业务语义。M1 的业务错误（如 409 `ROOM_UNDER_MAINTENANCE`）原样返回给前端。
+- 最终通过：先记下 `occupy_requested_at` 并提交（与读到同一版本的并发审批、驳回、撤回在此冲突），再 `occupy_room`，成功后在一个事务里改为 approved。本地事务因 `version` 冲突失败时只返回 409，不在请求里释放：对方是成功的最终审批时占用属于它（同一幂等键），对方使申请结束时由 `release_leftover_blocks` 释放。
+- 占用请求可能在途时（`room_service.occupy_in_flight()`：`occupy_requested_at` 之后 `RELEASE_GRACE` 内）不能结束 pending 申请：驳回、撤回返回 409 `OCCUPY_IN_PROGRESS`，`expire_overdue` 在 WHERE 中跳过。否则 M1 随后完成占用、取消了学生预约，申请却已结束，被取消的预约不会恢复。
 - 取消已通过的申请：先 `release_room`，成功后改为 cancelled；本地提交失败后重试会再次释放（幂等）。
 - 开发阶段 `STUB_CLIENTS=true`，客户端返回桩数据；测试中用 `campus_common.testing.record_service_calls()` 记录对 M1 的请求或模拟其返回，用 `monkeypatch` 替换 `clients` 里的业务函数来模拟 M1 失败。测试运行在冻结时钟上（`testing.NOW`）。
 
@@ -26,5 +27,5 @@
 
 - 多级流转：两级审批依次通过、驳回、非当前级审批人被拒绝、院系不匹配被拒绝、同一人两级被拒绝、截止与开始时刻边界。
 - 门槛边界：违约次数等于 `max_violations - 1` 可申请，等于 `max_violations` 不可申请。
-- M1 失败时申请状态不变；M1 成功但本地提交失败时发生补偿释放。
-- 超时：截止前不撤销、截止后撤销、重复执行不重复写记录。
+- M1 失败时申请状态不变；M1 成功但本地提交失败时不在请求里释放，申请未通过就结束后由 `release_leftover_blocks` 释放（含 `RELEASE_GRACE` 边界、M1 失败后重试、持续失败不挡住其他申请）。
+- 超时：截止前不撤销、截止后撤销、重复执行不重复写记录；占用请求在途时驳回、撤回、超时撤销都要等到 `RELEASE_GRACE` 之后。

@@ -8,6 +8,7 @@
   看得到但无权执行该操作时 403。
 - 最终通过：先记下占用请求时间并提交，再调用 M1 占用，成功后才改为 approved。M1 失败时申请仍是 pending；
   M1 可能已建立占用（例如超时）而申请随后未通过就结束时，由 jobs.release_leftover_blocks 释放。
+  占用请求可能在途时（occupy_in_flight()）不能驳回、撤回或超时撤销，避免 M1 刚取消学生预约、申请却结束。
 - 显示用的人员信息来自提交和审批时的登录凭证，读接口只调用 M1 查询待办的受影响预约数（失败时为空）。
 - 通知经 outbox 发出；发给审批人时按该级权限码寻址，院系级只发给申请人院系，由 common 解析收件人。
 """
@@ -40,6 +41,9 @@ from app.models import Application, ApprovalFlow, ApprovalRecord, Outbox, Settin
 PRODUCER = settings.service_name
 ACTIVE_STATUSES = ("pending", "approved")
 TIME_CONFLICT = (409, "APPLICATION_TIME_CONFLICT", "该教室在申请时段内已有有效申请")
+# 记下占用请求时间后的这段时间内视为请求可能仍在途。远大于 M1 客户端超时（5 秒，连接与读写分别计时），
+# 但不是上限：M1 端处理更久时，请求仍可能在这之后才完成
+RELEASE_GRACE = timedelta(minutes=1)
 FROM_STATUS: dict[s.RecordAction, str] = {
     "approve": "pending",
     "reject": "pending",
@@ -106,8 +110,9 @@ async def submit(session: AsyncSession, user: CurrentUser, body: s.ApplicationCr
         applicant_dept_id=user.dept_id,
         room_id=room.id,
         room_name=f"{room.building} {room.name}",
-        start_at=body.start_at,
-        end_at=body.end_at,
+        # 按业务时区保存：响应与通知中的时间都是 +08:00，不回显请求中的时区（如 Z）
+        start_at=to_biz(body.start_at),
+        end_at=to_biz(body.end_at),
         purpose=body.purpose,
         attendees=body.attendees,
         status="pending",
@@ -156,6 +161,7 @@ async def withdraw(session: AsyncSession, user: CurrentUser, application_id: int
     if application.status == "approved":
         await _cancel(session, user, application, at)
     else:
+        await _check_occupy_settled(session, application, at)
         transition(session, application, "withdraw", "withdrawn", at, actor=user)
         notify(
             session,
@@ -264,6 +270,7 @@ async def reject(
     at = now()
     application = await _load(session, user, application_id)
     await _check_turn(session, user, application, at)
+    await _check_occupy_settled(session, application, at)
     transition(session, application, "reject", "rejected", at, actor=user, comment=body.comment)
     notify(
         session,
@@ -392,6 +399,16 @@ def overdue(at: datetime) -> ColumnElement[bool]:
     return or_(Application.deadline_at <= at, Application.start_at <= at)
 
 
+def occupy_in_flight(at: datetime) -> ColumnElement[bool]:
+    """at 时最终审批的 M1 占用请求可能仍在途：记下请求时间后不到 RELEASE_GRACE。
+
+    occupy_requested_at 为空时为假（不是 NULL），因此可以直接取反。"""
+    return and_(
+        Application.occupy_requested_at.is_not(None),
+        Application.occupy_requested_at > at - RELEASE_GRACE,
+    )
+
+
 # ---------- 审批资格（SQL 条件） ----------
 
 
@@ -487,6 +504,15 @@ def _check_room(room: M1Room, user: CurrentUser, body: s.ApplicationCreate) -> N
         raise AppError(400, "OUTSIDE_OPEN_HOURS", "申请时段须在教室当天的开放时间内（不能跨天）")
 
 
+async def _check_occupy_settled(session: AsyncSession, application: Application, at: datetime) -> None:
+    """驳回、撤回 pending 申请前检查：占用请求可能在途时拒绝。否则 M1 随后完成占用、取消了时段内的学生预约，
+    申请却已结束，残留占用虽会被释放，被取消的预约不会恢复。"""
+    if await session.scalar(
+        select(occupy_in_flight(at)).where(Application.id == application.id, Application.status == "pending")
+    ):
+        raise AppError(409, "OCCUPY_IN_PROGRESS", "正在向 M1 申请占用教室，请稍后再试")
+
+
 async def _load(session: AsyncSession, user: CurrentUser, application_id: int) -> Application:
     application = await session.scalar(
         select(Application).where(Application.id == application_id, _visible_to(user))
@@ -562,6 +588,7 @@ async def _present_all(session: AsyncSession, applications: list[Application]) -
                 dept_id=a.applicant_dept_id,
             ),
             room_id=a.room_id,
+            room_name=a.room_name,
             start_at=a.start_at,
             end_at=a.end_at,
             purpose=a.purpose,

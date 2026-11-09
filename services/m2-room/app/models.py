@@ -66,7 +66,7 @@ class Application(TimestampMixin, Base):
     deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # 当前级别审批截止
     m1_block_id: Mapped[int | None] = mapped_column(Integer)  # 审批通过后 M1 返回的占用 ID
     # 最近一次请求 M1 占用的时间；非空表示 M1 可能持有本申请的占用（approved 时持有，释放后清空）。
-    # 未通过就结束的申请若非空，由 jobs.release_leftover_blocks 释放
+    # 未通过就结束的申请若非空，由 jobs.release_leftover_blocks 释放（释放失败时改为该次尝试的时间）
     occupy_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(Integer, default=1)  # 乐观锁
 

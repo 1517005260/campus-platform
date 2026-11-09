@@ -3,14 +3,15 @@
 from datetime import timedelta
 
 import pytest
-from app import clients
-from app.jobs import RELEASE_GRACE, expire_overdue, release_leftover_blocks
+from app import clients, jobs
+from app.jobs import expire_overdue, release_leftover_blocks
 from app.models import Application, ApprovalRecord
+from app.room_service import RELEASE_GRACE
 from campus_common.errors import AppError
 from campus_common.testing import NOW, record_service_calls
 from sqlalchemy import func, select
 
-from tests.conftest import APPLICANT, notifications
+from tests.conftest import APPLICANT, notifications, slot
 from tests.test_approval import act, set_columns, stored, submit
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures("m1_calls")]
@@ -55,6 +56,17 @@ def test_expire_when_slot_starts_before_deadline(client, db, as_applicant, as_de
     assert (notice["params"]["level"], notice["params"]["cause"]) == (2, "started")
 
 
+def test_expire_waits_while_occupy_may_be_in_flight(client, db, as_applicant, as_dept_approver):
+    """最终审批在截止时刻请求了 M1 占用（结果未知）：RELEASE_GRACE 内不撤销，之后撤销。"""
+    application_id = submit(client, as_applicant)
+    act(client, application_id, "approve", as_dept_approver)
+    deadline = stored(db, application_id).deadline_at
+    set_columns(db, application_id, occupy_requested_at=deadline)
+
+    assert expire_overdue(db, deadline + RELEASE_GRACE - timedelta(microseconds=1)) == []
+    assert expire_overdue(db, deadline + RELEASE_GRACE) == [application_id]
+
+
 def test_expire_skips_applications_no_longer_pending(client, db, as_applicant, as_dept_approver):
     application_id = submit(client, as_applicant)
     act(client, application_id, "reject", as_dept_approver)
@@ -95,14 +107,49 @@ def test_block_kept_while_pending_or_approved(
     assert calls == []
 
 
-def test_leftover_release_retried_when_m1_fails(client, db, as_applicant, as_dept_approver, monkeypatch):
+def test_leftover_release_retried_after_grace_when_m1_fails(
+    client, db, as_applicant, as_dept_approver, monkeypatch
+):
     application_id = ended_after_occupy_attempt(client, db, as_applicant, as_dept_approver, "expired")
+    calls = record_service_calls(monkeypatch, clients.m1, {"released": True})
+    real_request = clients.m1._http.request
 
-    async def unavailable(application_id):
+    async def unavailable(*args, **kwargs):
         raise AppError(502, "UPSTREAM_UNAVAILABLE", "M1 不可用")
 
-    monkeypatch.setattr(clients, "release_room", unavailable)
-    assert release_leftover_blocks(db, NOW + timedelta(hours=1)) == []
+    monkeypatch.setattr(clients.m1._http, "request", unavailable)
+    failed_at = NOW + timedelta(hours=1)
+    assert release_leftover_blocks(db, failed_at) == []
     db.commit()
-    assert stored(db, application_id).occupy_requested_at == NOW
+    assert stored(db, application_id).occupy_requested_at == failed_at
     assert db.scalar(select(func.count()).select_from(Application)) == 1
+
+    monkeypatch.setattr(clients.m1._http, "request", real_request)
+    assert release_leftover_blocks(db, failed_at + RELEASE_GRACE - timedelta(microseconds=1)) == []
+    assert calls == []
+    assert release_leftover_blocks(db, failed_at + RELEASE_GRACE) == [application_id]
+    assert len(calls) == 1
+
+
+def test_persistently_failing_release_does_not_starve_later_ones(
+    client, db, as_applicant, as_dept_approver, monkeypatch
+):
+    failing = ended_after_occupy_attempt(client, db, as_applicant, as_dept_approver, "expired")
+    later = submit(client, as_applicant, **slot(3))
+    set_columns(db, later, occupy_requested_at=NOW + timedelta(seconds=1), status="rejected")
+    monkeypatch.setattr(jobs, "RELEASE_BATCH", 1)
+    attempts = []
+
+    async def release(application_id):
+        attempts.append(application_id)
+        if application_id == failing:
+            raise AppError(502, "UPSTREAM_UNAVAILABLE", "M1 不可用")
+        return True
+
+    monkeypatch.setattr(clients, "release_room", release)
+    at = NOW + timedelta(hours=1)
+    assert release_leftover_blocks(db, at) == []
+    db.commit()
+    assert release_leftover_blocks(db, at) == [later]
+    db.commit()
+    assert attempts == [failing, later]

@@ -23,7 +23,7 @@ class UserBrief(BaseModel):
 
 class Eligibility(BaseModel):
     eligible: bool
-    reasons: list[str] = Field(description="不满足的原因，例如 近 30 天违约 3 次，达到上限 3 次")
+    reasons: list[str] = Field(description="不满足的原因，例如 近 30 天违约 3 次，违约达到 3 次不能申请")
 
 
 class ApplicationCreate(TimeRangeModel):
@@ -48,6 +48,7 @@ class Application(BaseModel):
     id: int
     applicant: UserBrief
     room_id: int
+    room_name: str = Field(description="提交时的教室名称快照（楼宇 名称）")
     start_at: AwareDatetime
     end_at: AwareDatetime
     purpose: str

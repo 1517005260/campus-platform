@@ -71,7 +71,8 @@ export interface paths {
          *     - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
          *     - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
          *     - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
-         *     - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR 或 M1 的 409 业务错误：占用失败，申请保持 pending，可重试
+         *     - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR 或 M1 的业务错误（原样返回，如 409 ROOM_UNDER_MAINTENANCE
+         *       教室正在维修）：占用失败，申请保持 pending，可重试
          */
         post: operations["approve_api_v1_room_applications__application_id__approve_post"];
         delete?: never;
@@ -97,6 +98,7 @@ export interface paths {
          *     - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
          *     - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
          *     - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
+         *     - 409 OCCUPY_IN_PROGRESS：最终审批正在向 M1 申请占用教室（请求后 1 分钟内），稍后再试
          */
         post: operations["reject_api_v1_room_applications__application_id__reject_post"];
         delete?: never;
@@ -121,6 +123,7 @@ export interface paths {
          *
          *     - 404 NOT_FOUND：看不到该申请；403 FORBIDDEN：不是申请人
          *     - 409 APPLICATION_STATE_CONFLICT：已结束、已开始的已通过申请，或并发修改
+         *     - 409 OCCUPY_IN_PROGRESS：撤回 pending 申请时，最终审批正在向 M1 申请占用教室（请求后 1 分钟内），稍后再试
          *     - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR：取消时 M1 释放失败，申请保持 approved，可重试
          */
         post: operations["withdraw_api_v1_room_applications__application_id__withdraw_post"];
@@ -319,6 +322,11 @@ export interface components {
             /** Room Id */
             room_id: number;
             /**
+             * Room Name
+             * @description 提交时的教室名称快照（楼宇 名称）
+             */
+            room_name: string;
+            /**
              * Start At
              * Format: date-time
              */
@@ -388,6 +396,11 @@ export interface components {
             /** Room Id */
             room_id: number;
             /**
+             * Room Name
+             * @description 提交时的教室名称快照（楼宇 名称）
+             */
+            room_name: string;
+            /**
              * Start At
              * Format: date-time
              */
@@ -446,7 +459,7 @@ export interface components {
             eligible: boolean;
             /**
              * Reasons
-             * @description 不满足的原因，例如 近 30 天违约 3 次，达到上限 3 次
+             * @description 不满足的原因，例如 近 30 天违约 3 次，违约达到 3 次不能申请
              */
             reasons: string[];
         };

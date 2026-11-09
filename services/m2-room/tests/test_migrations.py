@@ -60,3 +60,39 @@ def test_0003_backfills_snapshots_and_moves_school_levels_to_school_permission(d
     finally:
         db.rollback()
         command.upgrade(config, "head")
+
+
+def test_0003_deduplicates_flow_names_that_collide_after_trimming(db):
+    config = Config("alembic.ini")
+    command.downgrade(config, "0002")
+    try:
+        db.execute(text("DELETE FROM m2.approval_flows"))
+        db.execute(
+            text(
+                "INSERT INTO m2.approval_flows (id, name, priority, levels) VALUES "
+                "(1, ' 默认', 0, CAST(:levels AS jsonb)), (2, '默认', 0, CAST(:levels AS jsonb)), "
+                "(3, '读书会 ', 0, CAST(:levels AS jsonb)), (4, ' 读书会', 0, CAST(:levels AS jsonb)), "
+                "(5, ' ', 0, CAST(:levels AS jsonb)), (6, '审批流 5', 0, CAST(:levels AS jsonb)), "
+                "(7, :long, 0, CAST(:levels AS jsonb)), (8, :long_padded, 0, CAST(:levels AS jsonb))"
+            ),
+            {"levels": LEGACY_LEVELS, "long": "长" * 48, "long_padded": "长" * 48 + " "},
+        )
+        db.commit()
+
+        command.upgrade(config, "0003")
+
+        names = db.scalars(text("SELECT name FROM m2.approval_flows ORDER BY id")).all()
+        # 原本就是规范名称的一条保留原名，其余按 ID 加后缀；超长时先截断到 50 个字符以内
+        assert names == [
+            "默认 #1",
+            "默认",
+            "读书会",
+            "读书会 #4",
+            "审批流 5 #5",
+            "审批流 5",
+            "长" * 48,
+            "长" * 47 + " #8",
+        ]
+    finally:
+        db.rollback()
+        command.upgrade(config, "head")

@@ -9,7 +9,9 @@
 - 已有申请与记录没有快照，显示名补为"用户<ID>"、教室补为"教室 #<ID>"。
 - 学校级审批改用 room:approve_school：审批流配置与申请快照中每一级的 approver_perm 按 scope 改写
   （dept → room:approve，school → room:approve_school），在途申请的第 2 级由学校级审批人处理；
-  审批流名称去掉首尾空白，空白名称改为"审批流 <ID>"（之后保存接口按同一规则校验）。
+  审批流名称去掉首尾空白，空白名称改为"审批流 <ID>"（之后保存接口按同一规则校验）；规范化后重名的
+  （如"默认"与" 默认"），原本就是该名称的一条（没有则 ID 最小的一条）保留，其余加后缀" #<ID>"
+  （超长时先截断名称），保证唯一约束不被违反。
   回滚不还原这些数据（上一版代码同样可用）。
 
 Revision ID: 0003
@@ -72,9 +74,24 @@ def upgrade() -> None:
     )
     op.execute(f"UPDATE m2.approval_flows SET levels = {_perm_by_scope('levels')}")
     op.execute(f"UPDATE m2.applications SET flow_snapshot = {_perm_by_scope('flow_snapshot')}")
-    op.execute(
-        "UPDATE m2.approval_flows SET name = CASE WHEN btrim(name) = '' THEN '审批流 ' || id ELSE btrim(name) END"
-    )
+    # 先排已规范的那一条：它的名称不变，其他行改成的名称都与之不同，逐行检查的唯一约束不会中途冲突
+    op.execute("""
+        WITH normalized AS (
+            SELECT id, name, CASE WHEN btrim(name) = '' THEN '审批流 ' || id ELSE btrim(name) END AS base
+            FROM m2.approval_flows
+        ), ranked AS (
+            SELECT id, name, base,
+                   row_number() OVER (PARTITION BY base ORDER BY name <> base, id) AS position
+            FROM normalized
+        )
+        UPDATE m2.approval_flows AS flow
+        SET name = CASE
+            WHEN ranked.position = 1 THEN ranked.base
+            ELSE left(ranked.base, 50 - length(' #' || ranked.id)) || ' #' || ranked.id
+        END
+        FROM ranked
+        WHERE flow.id = ranked.id AND flow.name <> ranked.base
+    """)
 
 
 def downgrade() -> None:

@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from app import clients, room_service
 from app.models import Application, ApprovalRecord
+from app.room_service import RELEASE_GRACE
 from campus_common.errors import AppError
 from campus_common.testing import NOW, record_service_calls
 from sqlalchemy import select, update
@@ -263,6 +264,56 @@ def test_concurrent_final_approvers_conflict_before_calling_m1(
         "APPLICATION_STATE_CONFLICT",
     )
     assert m1_calls == []
+
+
+def test_m1_business_error_passed_through_and_application_stays_pending(
+    client, db, as_applicant, as_dept_approver, as_school_approver, monkeypatch
+):
+    """M1 拒绝占用（教室正在维修）：错误码与说明原样返回，申请仍待最后一级审批。"""
+    application_id = submit(client, as_applicant)
+    act(client, application_id, "approve", as_dept_approver)
+
+    async def under_maintenance(method, path, **kwargs):
+        raise AppError(409, "ROOM_UNDER_MAINTENANCE", "该教室正在维修，申请时段内不能占用")
+
+    monkeypatch.setattr(clients.m1._http, "request", under_maintenance)
+    response = act(client, application_id, "approve", as_school_approver)
+    assert (response.status_code, response.json()["code"], response.json()["message"]) == (
+        409,
+        "ROOM_UNDER_MAINTENANCE",
+        "该教室正在维修，申请时段内不能占用",
+    )
+    application = stored(db, application_id)
+    assert (application.status, application.current_level) == ("pending", 2)
+
+
+def _end_request(client, application_id, action, as_applicant, as_school_approver):
+    if action == "withdraw":
+        return client.post(f"/api/v1/room/applications/{application_id}/withdraw", headers=as_applicant)
+    return act(client, application_id, "reject", as_school_approver)
+
+
+@pytest.mark.parametrize("action", ["reject", "withdraw"])
+def test_reject_and_withdraw_wait_while_occupy_may_be_in_flight(
+    client, db, as_applicant, as_dept_approver, as_school_approver, action
+):
+    """最终审批已向 M1 请求占用（结果未知）：RELEASE_GRACE 内不能驳回或撤回，之后可以。"""
+    application_id = submit(client, as_applicant)
+    act(client, application_id, "approve", as_dept_approver)
+
+    set_columns(db, application_id, occupy_requested_at=NOW - RELEASE_GRACE + timedelta(microseconds=1))
+    blocked = _end_request(client, application_id, action, as_applicant, as_school_approver)
+    assert (blocked.status_code, blocked.json()["code"], blocked.json()["message"]) == (
+        409,
+        "OCCUPY_IN_PROGRESS",
+        "正在向 M1 申请占用教室，请稍后再试",
+    )
+    assert stored(db, application_id).status == "pending"
+
+    set_columns(db, application_id, occupy_requested_at=NOW - RELEASE_GRACE)
+    done = _end_request(client, application_id, action, as_applicant, as_school_approver)
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == {"reject": "rejected", "withdraw": "withdrawn"}[action]
 
 
 # ---------- 撤回与取消 ----------

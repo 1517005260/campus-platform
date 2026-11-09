@@ -40,7 +40,8 @@ async def approve(
     - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
     - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
     - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
-    - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR 或 M1 的 409 业务错误：占用失败，申请保持 pending，可重试
+    - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR 或 M1 的业务错误（原样返回，如 409 ROOM_UNDER_MAINTENANCE
+      教室正在维修）：占用失败，申请保持 pending，可重试
     """
     return await room_service.approve(session, user, application_id, body)
 
@@ -58,6 +59,7 @@ async def reject(
     - 409 APPLICATION_STATE_CONFLICT：申请已不在审批中，或被并发修改
     - 409 APPLICATION_EXPIRED：已到当前级别截止时间或申请时段已开始（等待自动撤销）
     - 403 NOT_YOUR_TURN：审批自己的申请、没有当前级别的权限码、院系级而不同院系、已审批过该申请的其他级别
+    - 409 OCCUPY_IN_PROGRESS：最终审批正在向 M1 申请占用教室（请求后 1 分钟内），稍后再试
     """
     return await room_service.reject(session, user, application_id, body)
 

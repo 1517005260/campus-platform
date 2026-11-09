@@ -35,6 +35,7 @@ def test_submit_snapshots_flow_applicant_and_room_and_notifies_level_one(client,
         "dept_id": 1,
     }
     assert created["deadline_at"] == (NOW + timedelta(hours=48)).isoformat()
+    assert created["room_name"] == "第三教学楼 H3106"
 
     stored = db.get(Application, created["id"])
     assert [(lv["scope"], lv["approver_perm"]) for lv in stored.flow_snapshot] == [
@@ -57,6 +58,22 @@ def test_submit_snapshots_flow_applicant_and_room_and_notifies_level_one(client,
         ("GET", f"/internal/v1/users/{APPLICANT}/violations"),
         ("GET", "/internal/v1/rooms/1"),
     ]
+
+
+def test_times_given_in_utc_are_returned_in_business_time_zone(client, db, as_applicant, m1_calls):
+    """2 天后北京时间 14:00–16:00，请求用 UTC（Z）表示；响应与通知都是 +08:00。"""
+    day = NOW.date() + timedelta(days=2)
+    response = post(client, as_applicant, start_at=f"{day}T06:00:00Z", end_at=f"{day}T08:00:00Z")
+    assert response.status_code == 201, response.text
+    assert (response.json()["start_at"], response.json()["end_at"]) == (
+        f"{day}T14:00:00+08:00",
+        f"{day}T16:00:00+08:00",
+    )
+    [notice] = notifications(db, "room.application_submitted")
+    assert (notice["params"]["start_at"], notice["params"]["end_at"]) == (
+        f"{day}T14:00:00+08:00",
+        f"{day}T16:00:00+08:00",
+    )
 
 
 def test_purpose_is_stripped_and_must_not_be_blank(client, db, as_applicant, m1_calls):

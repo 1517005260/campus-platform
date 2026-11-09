@@ -80,6 +80,7 @@ async def withdraw(
 
     - 404 NOT_FOUND：看不到该申请；403 FORBIDDEN：不是申请人
     - 409 APPLICATION_STATE_CONFLICT：已结束、已开始的已通过申请，或并发修改
+    - 409 OCCUPY_IN_PROGRESS：撤回 pending 申请时，最终审批正在向 M1 申请占用教室（请求后 1 分钟内），稍后再试
     - 502 UPSTREAM_UNAVAILABLE / UPSTREAM_ERROR：取消时 M1 释放失败，申请保持 approved，可重试
     """
     return await room_service.withdraw(session, user, application_id)

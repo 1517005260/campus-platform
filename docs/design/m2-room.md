@@ -16,7 +16,7 @@ M2 管理"借用整间教室"的申请和审批。教室信息属于 M1，M2 保
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | `approval_flows` | name(≤50), room_type?, dept_scoped?, priority, levels(JSONB) | levels：`[{level, approver_perm, scope: dept/school, timeout_hours}]`，级别从 1 连续；按 room_type 与是否院系教室匹配，多条匹配取 priority 最大 |
-| `applications` | applicant_id, applicant_username, applicant_name, applicant_dept_id, room_id, room_name, start_at, end_at, purpose, attendees, status, flow_snapshot, current_level, deadline_at, m1_block_id, occupy_requested_at, version | 申请人与教室名称是提交时的快照；flow_snapshot 是提交时的审批流副本；occupy_requested_at 是最近一次请求 M1 占用的时间（非空表示 M1 可能持有本申请的占用）；version 用于乐观锁；排除约束 `no_application_overlap` 保证同一教室 pending/approved 申请时段不重叠 |
+| `applications` | applicant_id, applicant_username, applicant_name, applicant_dept_id, room_id, room_name, start_at, end_at, purpose, attendees, status, flow_snapshot, current_level, deadline_at, m1_block_id, occupy_requested_at, version | 申请人与教室名称是提交时的快照；flow_snapshot 是提交时的审批流副本；occupy_requested_at 是最近一次请求 M1 占用的时间（非空表示 M1 可能持有本申请的占用；释放残留占用失败时改为那次尝试的时间）；version 用于乐观锁；排除约束 `no_application_overlap` 保证同一教室 pending/approved 申请时段不重叠 |
 | `approval_records` | application_id, level, approver_id?, approver_username?, approver_name?, approver_dept_id?, action, comment, at | 每次动作一条，操作人信息取自当时的登录凭证；系统动作（超时）操作人为空 |
 | `settings` | key, value | 默认值见 `schemas.RoomSettings` |
 | `outbox` | | |
@@ -66,13 +66,13 @@ stateDiagram-v2
 | 接口 | 说明 |
 |---|---|
 | `GET /api/v1/room/eligibility () -> {eligible, reasons}` \| `room:apply` | 调用 M1 查违约次数 |
-| `POST /api/v1/room/applications (room_id, start_at, end_at, purpose, attendees) -> Application` \| `room:apply` | 匹配审批流并快照，进入第 1 级，通知第 1 级审批人 |
+| `POST /api/v1/room/applications (room_id, start_at, end_at, purpose, attendees) -> Application` \| `room:apply` | 匹配审批流并快照，进入第 1 级，通知第 1 级审批人。时间按业务时区（+08:00）保存和返回，不回显请求中的时区；`Application` 带提交时的教室名称快照 `room_name` |
 | `GET /api/v1/room/applications/mine (status?, page, size) -> Page[Application]` \| `room:apply` | 按提交时间倒序 |
 | `GET /api/v1/room/applications/{id} () -> Application` \| `room:apply` / `room:approve` / `room:approve_school` | 可见范围见 §4 |
-| `POST /api/v1/room/applications/{id}/withdraw () -> Application` \| `room:apply` | pending → withdrawn；approved 且未开始 → 先释放再 cancelled |
+| `POST /api/v1/room/applications/{id}/withdraw () -> Application` \| `room:apply` | pending → withdrawn（占用请求在途时 409 `OCCUPY_IN_PROGRESS`）；approved 且未开始 → 先释放再 cancelled |
 | `GET /api/v1/room/approvals/todo (page, size) -> Page[ApplicationForApprover]` \| `room:approve` / `room:approve_school` | 只列当前用户此刻能处理的申请，按截止时间排序；`affected_reservations` 逐条并发查询 M1，失败时为 null（不影响列表） |
 | `POST /api/v1/room/applications/{id}/approve (comment?) -> Application` \| `room:approve` / `room:approve_school` | |
-| `POST /api/v1/room/applications/{id}/reject (comment?) -> Application` \| `room:approve` / `room:approve_school` | |
+| `POST /api/v1/room/applications/{id}/reject (comment?) -> Application` \| `room:approve` / `room:approve_school` | 占用请求在途时 409 `OCCUPY_IN_PROGRESS` |
 | `GET/PUT /api/v1/room/flows ([ApprovalFlow])` \| `room:flow_manage` | 整体替换 |
 | `GET/PUT /api/v1/room/settings (RoomSettings)` \| `room:flow_manage` | GET 也对 `room:apply` 开放，前端用于提示 |
 
@@ -93,9 +93,10 @@ stateDiagram-v2
 | `APPLICATION_EXPIRED` | 409 | 当前级别截止时间或申请开始时间已到，不能再审批 |
 | `APPLICATION_STATE_CONFLICT` | 409 | 状态不允许该操作（含已开始的申请不能取消），或乐观锁冲突 |
 | `FORBIDDEN` | 403 | 撤回或取消别人的申请 |
+| `OCCUPY_IN_PROGRESS` | 409 | 驳回或撤回 pending 申请时，最终审批的 M1 占用请求可能仍在途（`occupy_requested_at` 之后 1 分钟内），见 §6 |
 | `DUPLICATE_FLOW_NAME` | 409 | 审批流名称重复 |
 | `NOT_FOUND` | 404 | 申请不存在或看不到；教室不存在（来自 M1） |
-| `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR` | 502 | M1 不可用或拒绝调用；M1 的业务错误（如占用冲突 409）原样返回 |
+| `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR` | 502 | M1 不可用或拒绝调用；M1 的业务错误原样返回（状态码、code、说明不变），如最终审批时教室正在维修：409 `ROOM_UNDER_MAINTENANCE`（M1 不允许 M2 占用与未释放的维修下架重叠，维修下架从开始起无限期） |
 
 ## 6. 对外调用与通知
 
@@ -127,7 +128,7 @@ stateDiagram-v2
 ### 最终审批通过的步骤
 
 1. 加载申请（看不到则 404），按 `turn_rules()` 检查：pending、截止与开始时间未到、不是申请人、符合当前级别的权限码与范围、没有审批过其他级别。
-2. 记下 `occupy_requested_at = now` 并提交。并发的另一次最终审批或撤销在这一步因 `version` 冲突返回 409，后到的一方不会调用 M1。
+2. 记下 `occupy_requested_at = now` 并提交。与它读到同一版本的另一次最终审批、驳回或撤回，谁后提交谁因 `version` 冲突返回 409；本次审批后提交时不会调用 M1。另一次最终审批若在这次提交之后才读取申请（仍是 pending），也会走到第 3 步调用 M1，但幂等键相同，M1 返回同一个占用，第 4 步只有一方成功。提交之后的 `RELEASE_GRACE`（1 分钟）内视为占用请求可能在途：驳回、撤回返回 409 `OCCUPY_IN_PROGRESS`，超时撤销跳过该申请；否则 M1 随后完成占用并取消学生预约，申请却已结束，残留占用虽会被释放，被取消的预约不会恢复。
 3. 调用 `occupy_room`。失败 → 申请仍是 pending（审批人可重试），错误原样返回：M1 不可达或拒绝调用 502，M1 的业务错误（如教室已被占用 409）原样返回。
 4. 在一个事务里：status=approved、写 `approval_records`、保存 `m1_block_id`、outbox 通知申请人、发 `m2.application.status_changed`。`version` 冲突时返回 409 `APPLICATION_STATE_CONFLICT`，不在请求里补偿：若对方是另一次成功的最终审批，占用属于它，不能释放；若对方使申请结束（驳回、撤回、超时），由 `release_leftover_blocks` 释放。补偿因此不会掩盖原始错误，也不会误释放别人的占用。
 
@@ -139,8 +140,8 @@ stateDiagram-v2
 
 | 任务 | 频率 | 逻辑 |
 |---|---|---|
-| `expire_overdue` | 1 分钟 | `status='pending' AND (deadline_at <= now OR start_at <= now)`，SKIP LOCKED 抢行 → expired，写审批记录（系统动作，注明超时或已开始），通知申请人；与审批人并发时由 `version` 保证只有一方生效 |
-| `release_leftover_blocks` | 1 分钟 | `status IN ('rejected','withdrawn','expired') AND occupy_requested_at <= now - 1 分钟`，SKIP LOCKED 抢行（每批 20 条），调用 M1 释放（幂等）后清空 `occupy_requested_at`；M1 失败的留到下一轮。1 分钟的等待大于 M1 客户端超时，在途的占用请求结束后才释放 |
+| `expire_overdue` | 1 分钟 | `status='pending' AND (deadline_at <= now OR start_at <= now)` 且占用请求不在途（`occupy_in_flight` 为假），SKIP LOCKED 抢行 → expired，写审批记录（系统动作，注明超时或已开始），通知申请人；与审批人并发时由 `version` 保证只有一方生效 |
+| `release_leftover_blocks` | 1 分钟 | `status IN ('rejected','withdrawn','expired') AND occupy_requested_at <= now - 1 分钟`，按 `occupy_requested_at` 排序，SKIP LOCKED 抢行（每批 20 条），调用 M1 释放（幂等）后清空 `occupy_requested_at`；M1 失败的把 `occupy_requested_at` 改为本轮时刻，1 分钟后重试并排到队尾，持续失败的不会挡住其他申请。1 分钟远大于 M1 客户端超时（5 秒，连接与读写分别计时），通常足以让在途的占用请求结束，但不是保证：M1 处理超过 1 分钟才提交占用时，释放会先于占用发生，之后的占用不会被本任务释放 |
 | `relay_outbox` | 2 秒 | 公共库 |
 
 ## 8. 实现顺序
@@ -153,7 +154,7 @@ stateDiagram-v2
 | 4 | 超时撤销与残留占用释放 | `twllif` | 已实现 |
 | 5 | 撤回与取消、通知 | `twllif` | 已实现 |
 | 6 | 审批流配置接口 | `twllif` | 已实现 |
-| 7 | 与 M1 联调（`STUB_CLIENTS=false`），去掉集成测试的 xfail | `twllif` | 待联调 |
+| 7 | 与 M1 联调（`STUB_CLIENTS=false`），去掉集成测试的 xfail | `twllif` | 已去掉 xfail，由测试环境部署后的集成测试验证 |
 
 ## 9. 待讨论
 
