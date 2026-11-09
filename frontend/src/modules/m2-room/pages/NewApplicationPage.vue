@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 提交整教室申请：选教室（M1 中允许整室借用的）、时段、用途与人数。
- * 可选日期按申请参数 advance_days_min ~ advance_days_max 限制，时段按教室当天的开放时间；
+ * 可选日期按申请参数 advance_days_min ~ advance_days_max 限制，时段按教室当天的开放时间，当天不开放时不能提交；
  * 提交前展示资格门槛结果，不满足时禁止提交。
  */
 import { ElMessage } from "element-plus";
@@ -11,7 +11,7 @@ import { useRouter } from "vue-router";
 import HourRangePicker, { type HourRange } from "@/core/components/HourRangePicker.vue";
 import { addDays, bizHourIso, bizNow } from "@/core/format";
 import { showError } from "@/core/http";
-import { roomLabel, useRooms } from "@/core/rooms";
+import { bookableHours, roomLabel, useRooms } from "@/core/rooms";
 
 import { roomApi, type Eligibility, type RoomSettings } from "../api";
 
@@ -64,6 +64,7 @@ function formError(): string | null {
   if (!form.room_id) return "请选择教室";
   const { date } = form.range;
   if (date < minDate.value || date > maxDate.value) return `日期需在 ${minDate.value} 至 ${maxDate.value} 之间`;
+  if (!bookableHours(openHours.value, date)) return "该教室在所选日期没有可选时段，请换一天";
   if (form.range.end_hour <= form.range.start_hour) return "请选择有效的时段";
   if (form.purpose.trim().length < PURPOSE_MIN) return `请填写用途（至少 ${PURPOSE_MIN} 个字）`;
   return null;

@@ -23,14 +23,7 @@ export function withdrawAction(a: Application, now = Date.now()): { label: strin
 /** 确认后撤回；成功返回 true（调用方刷新），取消或失败返回 false */
 export async function withdrawApplication(a: Application): Promise<boolean> {
   const action = withdrawAction(a);
-  if (
-    !action ||
-    !(await confirmAction(action.confirm, `${action.label}申请`, {
-      confirmButtonText: `${action.label}申请`,
-      cancelButtonText: "返回",
-    }))
-  )
-    return false;
+  if (!action || !(await confirmAction(action.confirm, { action: `${action.label}申请` }))) return false;
   try {
     await roomApi.POST("/api/v1/room/applications/{application_id}/withdraw", {
       params: { path: { application_id: a.id } },

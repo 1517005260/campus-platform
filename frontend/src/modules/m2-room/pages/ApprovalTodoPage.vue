@@ -9,12 +9,10 @@ import { promptText } from "@/core/dialogs";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
 import { usePagedList } from "@/core/pagedList";
-import { useRooms } from "@/core/rooms";
 
 import { roomApi, type ApplicationForApprover } from "../api";
 
 const router = useRouter();
-const { load: loadRooms, nameOf } = useRooms({ is_whole_bookable: true });
 const { items, total, page, size, loading, load } = usePagedList((p) =>
   roomApi.GET("/api/v1/room/approvals/todo", { params: { query: p } }).then((r) => r.data!),
 );
@@ -42,25 +40,21 @@ async function act(row: ApplicationForApprover, action: "approve" | "reject") {
       body: { comment: comment || null },
     });
     ElMessage.success(action === "approve" ? "已通过" : "已驳回");
-    await load();
   } catch (e) {
     showError(e);
   }
+  // 失败时也刷新：申请可能已被撤回、超时或由他人处理，不再待我审批
+  await load();
 }
 
-onMounted(() => {
-  void load();
-  void loadRooms();
-});
+onMounted(load);
 </script>
 
 <template>
   <PaginatedTable :data="items" :loading="loading" :total="total" v-model:page="page" v-model:size="size">
     <el-table-column label="申请号" prop="id" width="80" />
     <el-table-column label="申请人" prop="applicant.name" width="100" />
-    <el-table-column label="教室" width="160">
-      <template #default="{ row }">{{ nameOf(row.room_id) }}</template>
-    </el-table-column>
+    <el-table-column label="教室" prop="room_name" width="160" />
     <el-table-column label="开始">
       <template #default="{ row }">{{ fmtTime(row.start_at) }}</template>
     </el-table-column>
