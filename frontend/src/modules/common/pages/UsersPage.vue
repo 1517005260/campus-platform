@@ -126,7 +126,7 @@ async function saveRoles() {
 async function toggleActive(u: UserAdmin) {
   const action = u.active ? "停用" : "启用";
   const message = u.active ? `停用后 ${u.name} 不能再登录（已登录的会话到期前仍有效）。确认停用？` : `启用 ${u.name}？`;
-  if (!(await confirmAction(message, action))) return;
+  if (!(await confirmAction(message, { action }))) return;
   try {
     await commonApi.PATCH("/api/v1/admin/users/{user_id}", {
       params: { path: { user_id: u.id } },

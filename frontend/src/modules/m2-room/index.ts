@@ -18,12 +18,12 @@ const m: AppModule = {
       // 非数字 id 不匹配，由兜底路由处理
       path: "/room/applications/:id(\\d+)",
       component: () => import("./pages/ApplicationDetailPage.vue"),
-      meta: { title: "申请详情", perms: ["room:apply", "room:approve"] },
+      meta: { title: "申请详情", perms: ["room:apply", "room:approve", "room:approve_school"] },
     },
     {
       path: "/room/approvals",
       component: () => import("./pages/ApprovalTodoPage.vue"),
-      meta: { title: "待我审批", perms: ["room:approve"] },
+      meta: { title: "待我审批", perms: ["room:approve", "room:approve_school"] },
     },
     {
       path: "/room/flows",
@@ -33,7 +33,7 @@ const m: AppModule = {
   ],
   menu: [
     { title: "我的申请", path: "/room/mine", perms: ["room:apply"] },
-    { title: "待我审批", path: "/room/approvals", perms: ["room:approve"] },
+    { title: "待我审批", path: "/room/approvals", perms: ["room:approve", "room:approve_school"] },
     { title: "审批流配置", path: "/room/flows", perms: ["room:flow_manage"] },
   ],
 };

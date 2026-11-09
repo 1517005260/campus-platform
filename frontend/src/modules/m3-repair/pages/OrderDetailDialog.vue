@@ -1,11 +1,12 @@
 <script setup lang="ts">
-/** 工单详情对话框：基本信息 + 处理时间线。 */
+/** 工单详情对话框：基本信息 + 处理时间线。教室名称由打开它的页面给出（页面已加载教室列表）。 */
 import { fmtTime } from "@/core/format";
+import { seatCode } from "@/core/rooms";
 
 import { orderStatusLabel, timelineActionLabel, type WorkOrder } from "../api";
 
 const visible = defineModel<boolean>({ required: true });
-defineProps<{ order: WorkOrder | null }>();
+defineProps<{ order: WorkOrder | null; roomName: string }>();
 
 /** 只把 http(s) 链接渲染成可点击的链接，其他内容（如 javascript:）按文本显示 */
 const isWebLink = (url: string) => /^https?:\/\//i.test(url);
@@ -19,9 +20,9 @@ const isWebLink = (url: string) => /^https?:\/\//i.test(url);
         <el-descriptions-item label="状态">{{ orderStatusLabel[order.status] }}</el-descriptions-item>
         <el-descriptions-item label="报修人">{{ order.reporter.name }}</el-descriptions-item>
         <el-descriptions-item label="维修人">{{ order.assignee?.name ?? "未派单" }}</el-descriptions-item>
-        <el-descriptions-item label="教室编号">{{ order.room_id }}</el-descriptions-item>
+        <el-descriptions-item label="教室">{{ roomName }}</el-descriptions-item>
         <el-descriptions-item label="座位">
-          {{ order.seat_id ? `#${order.seat_id}` : "教室整体" }}
+          {{ order.seat_id ? seatCode(order.room_id, order.seat_id) : "教室整体" }}
         </el-descriptions-item>
         <el-descriptions-item label="分类">{{ order.category }}</el-descriptions-item>
         <el-descriptions-item label="下架教室">{{ order.blocks_room ? "是" : "否" }}</el-descriptions-item>

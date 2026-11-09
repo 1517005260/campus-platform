@@ -21,6 +21,8 @@ const roomTypeOptions = [
   { value: "other", label: "其他" },
 ];
 const scopeLabel: Record<string, string> = { dept: "院系", school: "学校" };
+/** 审批权限由范围决定（后端校验）：院系级 room:approve，学校级 room:approve_school */
+const scopePerm = { dept: "room:approve", school: "room:approve_school" } as const;
 
 function emptyFlow(): ApprovalFlow {
   return {
@@ -59,11 +61,10 @@ async function loadFlows() {
   }
 }
 
-/** 保存前校验：名称与各级审批权限码不能为空（数字框清空时回到最小值，不会提交 null） */
+/** 保存前校验：名称不能为空（数字框清空时回到最小值，不会提交 null） */
 function flowsError(): string | null {
   for (const [i, flow] of flows.value.entries()) {
     if (!flow.name.trim()) return `第 ${i + 1} 个审批流缺少名称`;
-    if (flow.levels.some((l) => !l.approver_perm.trim())) return `审批流「${flow.name}」有审批级缺少权限码`;
   }
   return null;
 }
@@ -80,7 +81,7 @@ async function saveFlows() {
       body: flows.value.map((f) => ({
         ...f,
         name: f.name.trim(),
-        levels: f.levels.map((l) => ({ ...l, approver_perm: l.approver_perm.trim() })),
+        levels: f.levels.map((l) => ({ ...l, approver_perm: scopePerm[l.scope] })),
       })),
     });
     ElMessage.success("审批流已保存");
@@ -171,7 +172,7 @@ onMounted(() => {
         <el-select v-model="l.scope" style="width: 110px">
           <el-option v-for="(label, value) in scopeLabel" :key="value" :label="label" :value="value" />
         </el-select>
-        <el-input v-model="l.approver_perm" placeholder="审批权限码" style="width: 200px" />
+        <span>{{ scopePerm[l.scope] }}</span>
         <span class="timeout">超时（小时）</span>
         <el-input-number v-model="l.timeout_hours" :min="1" value-on-clear="min" />
         <el-button link type="danger" :disabled="flow.levels.length <= 1" @click="removeLevel(flow, j)">

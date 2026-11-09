@@ -26,14 +26,13 @@ campus-common = { workspace = true }
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+usefixtures = ["clock"]  # 冻结时钟，见 campus_common.pytest_plugin
 markers = ["db: 需要 Postgres（CI 中自动提供；本地先启动 docker-compose.dev.yml）"]
 
 [tool.coverage.run]
 source = ["app"]
 # 异步会话经 greenlet 执行，不开启 greenlet 跟踪时 await 之后的代码都会被算作未覆盖
 concurrency = ["greenlet", "thread"]
-omit = ["app/stubs.py"]
 
 [tool.coverage.report]
-# 桩阶段的起点；每完成一批真实实现就上调，第二次 Review 前达到 70
-fail_under = 50
+fail_under = 90

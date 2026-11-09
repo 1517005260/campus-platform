@@ -10,3 +10,4 @@ worker = ServiceWorker(settings, outbox_model=Outbox)
 celery = worker.celery
 
 worker.scan(jobs.expire_overdue, every=60)
+worker.scan(jobs.release_leftover_blocks, every=60)

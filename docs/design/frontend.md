@@ -17,9 +17,9 @@ src/
 │   ├── http.ts            createApi<paths>()：带 token、统一错误、401 处理
 │   ├── commonApi.ts       common 服务的唯一客户端（登录、通知铃铛与 common 模块页面共用）
 │   ├── seatApi.ts         M1 服务的唯一客户端（m1-seat 模块与 M2/M3 选教室共用）
-│   ├── rooms.ts           教室下拉与名称（useRooms，逐页取完）、教室某天的开放整点
+│   ├── rooms.ts           教室下拉与名称（useRooms，逐页取完）、教室详情缓存与座位编号（fetchRoomDetail / seatCode）、某天可选整点（bookableHours）
 │   ├── pagedList.ts       分页列表状态 usePagedList（筛选变化 reload 回第 1 页），配合 PaginatedTable
-│   ├── dialogs.ts         confirmAction / promptText：确认框、输入框，取消返回 false / null
+│   ├── dialogs.ts         confirmAction / promptText：确认框、输入框，取消返回 false / null；action 选项让按钮写明动作（如"取消预约 / 返回"）
 │   ├── format.ts          时间按业务时区（Asia/Shanghai）显示与提交：fmtTime、bizIso、bizNow、bizWallTime 等
 │   ├── auth/              登录页、pinia store（token、用户、can(perm)）
 │   ├── router.ts          合并各模块路由；登录与权限守卫

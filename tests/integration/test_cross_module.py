@@ -1,17 +1,10 @@
-"""跨模块状态写回链路（任务书第二节）。
-
-这些测试在桩阶段会失败，所以先标记 xfail；对应链路实现后删除标记，
-之后它们就是阻断部署的正式检查。
-"""
+"""跨模块状态写回链路（任务书第二节）。M3、M2 的链路都已实现，这些测试是阻断部署的正式检查。"""
 
 from datetime import timedelta
 
-import pytest
-from time_helpers import next_hour_iso
+from time_helpers import day_at_iso, next_hour_iso
 
-PENDING = pytest.mark.xfail(reason="链路尚未实现；实现后删除此标记", strict=False)
-
-ROOM_ID = 1  # 演示数据：第三教学楼 H3106，允许整教室申请
+ROOM_ID = 1  # 演示数据：第三教学楼 H3106，允许整教室申请，每天 8–22 点开放
 
 
 def _room_sources(http, headers, seat_id):
@@ -51,7 +44,6 @@ def test_m3_maintenance_blocks_and_restores_room(http, login):
     assert ("M3_MAINTENANCE", order["id"], "unblocked") in _room_sources(http, admin, seat_id)
 
 
-@PENDING
 def test_m2_approval_occupies_room_and_withdraw_releases(http, login):
     applicant, dept_approver, school_approver, admin = (
         login("teacher"),
@@ -59,13 +51,15 @@ def test_m2_approval_occupies_room_and_withdraw_releases(http, login):
         login("school_approver"),
         login("room_admin"),
     )
-    start = next_hour_iso(timedelta(days=3))
-    end = next_hour_iso(timedelta(days=3, hours=2))
-    app = http.post(
+    # 固定在开放时间内：按运行时刻取下一个整点可能落在 22 点之后
+    start, end = day_at_iso(3, 10), day_at_iso(3, 12)
+    created = http.post(
         "/api/v1/room/applications",
         json={"room_id": ROOM_ID, "start_at": start, "end_at": end, "purpose": "集成测试", "attendees": 20},
         headers=applicant,
-    ).json()
+    )
+    created.raise_for_status()
+    app = created.json()
     for approver in (dept_approver, school_approver):
         http.post(
             f"/api/v1/room/applications/{app['id']}/approve", json={}, headers=approver

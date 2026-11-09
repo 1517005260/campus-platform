@@ -68,7 +68,7 @@ const { items, total, page, size, loading, load, reload } = usePagedList((p) =>
 watch(statusFilter, reload);
 
 async function cancel(r: ReservationDetail) {
-  if (!(await confirmAction(`取消 ${r.room.name} ${r.seat.code} 的预约？`))) return;
+  if (!(await confirmAction(`取消 ${r.room.name} ${r.seat.code} 的预约？`, { action: "取消预约" }))) return;
   try {
     await seatApi.POST("/api/v1/seat/reservations/{reservation_id}/cancel", {
       params: { path: { reservation_id: r.id } },

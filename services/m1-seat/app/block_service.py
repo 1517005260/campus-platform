@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app import schemas as s
 from app.models import Outbox, Reservation, Room, RoomBlock, Seat, SeatStatusLog, Violation
-from app.shared import PRODUCER, active_reservations, lock_room, release_reservation
+from app.shared import PRODUCER, active_reservations, lock_room, release_reservation, unreleased_blocks
 
 CALLER_SOURCE = {"m2-room": "M2_OCCUPY", "m3-repair": "M3_MAINTENANCE"}
 CANCEL_REASON = {"M2_OCCUPY": "BLOCKED_BY_M2", "M3_MAINTENANCE": "BLOCKED_BY_M3"}
@@ -72,6 +72,15 @@ async def create_block(
     )
     if block_id is None:
         return await _existing_block(session, body)
+    # 只检查新的占用（已有单号按上面的规则处理）。教室行已锁住，检查与插入之间不会有新的下架；
+    # 报错时整个事务回滚，刚插入的行随之撤销。M3 下架反过来不受 M2 占用限制（紧急维修优先）
+    if body.source == "M2_OCCUPY" and await session.scalar(
+        unreleased_blocks(body.start_at, body.end_at)
+        .where(RoomBlock.room_id == body.room_id, RoomBlock.source == "M3_MAINTENANCE")
+        .exists()
+        .select()
+    ):
+        raise AppError(409, "ROOM_UNDER_MAINTENANCE", "该教室正在维修，申请时段内不能占用")
 
     reservations = (
         await session.scalars(

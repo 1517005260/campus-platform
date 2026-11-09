@@ -10,8 +10,7 @@ import PaginatedTable from "@/core/components/PaginatedTable.vue";
 import { promptText } from "@/core/dialogs";
 import { showError } from "@/core/http";
 import { usePagedList } from "@/core/pagedList";
-import { roomLabel, useRooms, type Seat } from "@/core/rooms";
-import { seatApi } from "@/core/seatApi";
+import { fetchRoomDetail, roomLabel, seatCode, useRooms, type Seat } from "@/core/rooms";
 
 import OrderDetailDialog from "./OrderDetailDialog.vue";
 import { orderStatusLabel, repairApi, type WorkOrder } from "../api";
@@ -27,7 +26,7 @@ const { items, total, page, size, loading, load } = usePagedList((p) =>
 /** ---- 上报故障 ---- */
 const showForm = ref(false);
 const submitting = ref(false);
-const { rooms, load: loadRooms } = useRooms();
+const { rooms, load: loadRooms, nameOf } = useRooms();
 const seats = ref<Seat[]>([]);
 const categories = ref<string[]>([]);
 const form = reactive({
@@ -40,8 +39,7 @@ const form = reactive({
 
 async function openForm() {
   showForm.value = true;
-  if (rooms.value.length > 0) return;
-  void loadRooms();
+  if (categories.value.length > 0) return;
   try {
     const { data } = await repairApi.GET("/api/v1/repair/settings");
     categories.value = data!.categories;
@@ -59,8 +57,7 @@ watch(
     seats.value = [];
     if (roomId === undefined) return;
     try {
-      const { data } = await seatApi.GET("/api/v1/seat/rooms/{room_id}", { params: { path: { room_id: roomId } } });
-      seats.value = data!.seats;
+      seats.value = (await fetchRoomDetail(roomId)).seats;
     } catch (e) {
       showError(e);
     }
@@ -156,6 +153,7 @@ async function rejectAcceptance(o: WorkOrder) {
 
 async function cancelOrder(o: WorkOrder) {
   const reason = await promptText("请填写取消原因", `取消工单 #${o.id}`, {
+    action: "取消工单",
     inputType: "textarea",
     minLength: TEXT_MIN,
   });
@@ -172,7 +170,10 @@ async function cancelOrder(o: WorkOrder) {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadRooms();
+});
 </script>
 
 <template>
@@ -180,9 +181,11 @@ onMounted(load);
 
   <PaginatedTable :data="items" :loading="loading" :total="total" v-model:page="page" v-model:size="size">
     <el-table-column label="工单号" prop="id" width="80" />
-    <el-table-column label="教室" prop="room_id" width="80" />
+    <el-table-column label="教室" width="160">
+      <template #default="{ row }">{{ nameOf(row.room_id) }}</template>
+    </el-table-column>
     <el-table-column label="座位" width="90">
-      <template #default="{ row }">{{ row.seat_id ? `#${row.seat_id}` : "整体" }}</template>
+      <template #default="{ row }">{{ row.seat_id ? seatCode(row.room_id, row.seat_id) : "整体" }}</template>
     </el-table-column>
     <el-table-column label="分类" prop="category" width="90" />
     <el-table-column label="描述" prop="description" show-overflow-tooltip />
@@ -273,5 +276,9 @@ onMounted(load);
     </template>
   </el-dialog>
 
-  <OrderDetailDialog v-model="detailVisible" :order="detailOrder" />
+  <OrderDetailDialog
+    v-model="detailVisible"
+    :order="detailOrder"
+    :room-name="detailOrder ? nameOf(detailOrder.room_id) : ''"
+  />
 </template>

@@ -3,12 +3,42 @@
 from typing import Annotated, Any, Literal
 
 from campus_common.auth import CurrentUser
-from pydantic import AwareDatetime, BaseModel, Field, StringConstraints
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    Field,
+    StringConstraints,
+    ValidationError,
+    ValidatorFunctionWrapHandler,
+    WrapValidator,
+)
+from pydantic_core import PydanticCustomError
+
+
+def _message(text: str) -> WrapValidator:
+    """字段校验失败时只报一条中文说明（422 details 中的 msg），约束本身与 OpenAPI 描述不变。"""
+
+    def validate(value: Any, handler: ValidatorFunctionWrapHandler) -> Any:
+        try:
+            return handler(value)
+        except ValidationError:
+            raise PydanticCustomError("invalid_value", text) from None
+
+    return WrapValidator(validate)
+
 
 # 去掉首尾空白后不能为空
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
-Email = Annotated[str, StringConstraints(strip_whitespace=True, max_length=100, pattern=r"^[^@\s]+@[^@\s]+$")]
-Password = Annotated[str, Field(min_length=8, max_length=72, description="bcrypt 只取前 72 字节")]
+Email = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, max_length=100, pattern=r"^[^@\s]+@[^@\s]+$"),
+    _message("邮箱格式不正确（形如 name@example.com，最多 100 个字符）"),
+]
+Password = Annotated[
+    str,
+    Field(min_length=8, max_length=72, description="bcrypt 只取前 72 字节"),
+    _message("密码长度须为 8–72 个字符"),
+]
 
 
 class LoginRequest(BaseModel):

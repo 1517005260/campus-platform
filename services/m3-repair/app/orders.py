@@ -19,7 +19,7 @@ from campus_common.events import NotificationSend, Ref, WorkOrderStatusChanged
 from campus_common.outbox import add_event
 from campus_common.pagination import Page, PageParams, page_of, paginate
 from campus_common.params import aload_params, asave_params
-from campus_common.timeutil import now
+from campus_common.timeutil import now, to_biz
 from sqlalchemy import Select, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,9 +156,10 @@ async def dispatch(
         order = await _load(session, user, order_id, lock=True)
         await _remember(session, user, assignee)
         await _move(session, order, user.id, "dispatch", "dispatched", at, expected="submitted")
+        # 按业务时区保存，响应与通知中的时间都是 +08:00，而不是原样回显请求中的时区
         order.assignee_id, order.deadline_at, order.blocks_room = (
             assignee.id,
-            body.deadline_at,
+            to_biz(body.deadline_at),
             body.blocks_room,
         )
         notify(
@@ -166,7 +167,7 @@ async def dispatch(
             order,
             "repair.dispatched",
             user_ids=[assignee.id],
-            deadline_at=body.deadline_at.isoformat(),
+            deadline_at=order.deadline_at.isoformat(),
             blocks_room=body.blocks_room,
         )
         return await _present(session, order)

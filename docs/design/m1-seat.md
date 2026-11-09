@@ -140,6 +140,7 @@ stateDiagram-v2
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 占用 | 同一幂等键对应了不同的请求内容（同一幂等键、同样的请求则重放首次结果） |
 | `BLOCK_REFERENCE_CONFLICT` | 409 | 占用 | 换了幂等键，同一 (source, ref_id) 却是不同的占用请求 |
 | `BLOCK_ALREADY_RELEASED` | 409 | 占用 | 换了幂等键，而该 (source, ref_id) 的占用已释放。M2、M3 的幂等键按单号固定，正常重试不会遇到它，同键重发得到的是首次结果（见第 6 节） |
+| `ROOM_UNDER_MAINTENANCE` | 409 | 占用 | M2 的新占用与该教室未释放的 M3 维修下架重叠（见第 6 节第 4 步） |
 
 ## 6. 占用与释放（INT-01、INT-02、INT-04）
 
@@ -148,10 +149,11 @@ stateDiagram-v2
 1. `run_idempotent` 按 (调用方, Idempotency-Key) 加锁并检查是否已处理，已处理直接返回首次结果。
 2. `SELECT ... FROM rooms WHERE id = :room_id FOR UPDATE`：与同一教室的新预约、停用串行化（它们也先锁教室行）。
 3. `INSERT INTO room_blocks ... ON CONFLICT (source, ref_id) DO NOTHING`：(source, ref_id) 唯一，一个单号只对应一次占用生命周期。只有换了幂等键的请求才会走到这里（同一幂等键在第 1 步已被重放或拒绝）。已存在时不再取消预约：已释放返回 409 `BLOCK_ALREADY_RELEASED`；请求内容（教室、起止、原因）不同返回 409 `BLOCK_REFERENCE_CONFLICT`；相同则返回已有的 `block_id`，`cancelled_reservations` 为空（被取消的预约在首次调用的返回值里）。
-4. 查出时段内状态为 booked/checked_in 的预约，改为 cancelled，`cancel_reason = BLOCKED_BY_M2 / BLOCKED_BY_M3`，不写 violations。
-5. 为每个座位写 `seat_status_logs(state=blocked)`，为被取消的预约写 `released`。
-6. outbox：给被取消的学生发 `notification.send`；发 `audit.record`（actor_type=service，actor_id=调用方）；每个被取消的预约发 `m1.reservation.cancelled(reason=BLOCKED)`。
-7. 返回 `{block_id, cancelled_reservations}`。
+4. 新的 M2 占用（`M2_OCCUPY`）与该教室未释放的 M3 维修下架时段重叠时返回 409 `ROOM_UNDER_MAINTENANCE`，整个事务回滚。M3 下架的 `end_at` 为空（维修结束时间未知），按无限期计算，所以维修开始后、释放前，该教室在维修开始之后的任何时段都不能被 M2 占用。反过来 M3 下架不受 M2 占用限制（紧急维修优先）：照常下架并取消时段内的个人预约，已有的 M2 占用保持不变（维修释放后 M2 的占用仍然有效）。第 2 步已锁教室行，检查与插入之间不会出现新的下架。
+5. 查出时段内状态为 booked/checked_in 的预约，改为 cancelled，`cancel_reason = BLOCKED_BY_M2 / BLOCKED_BY_M3`，不写 violations。
+6. 为每个座位写 `seat_status_logs(state=blocked)`，为被取消的预约写 `released`。
+7. outbox：给被取消的学生发 `notification.send`；发 `audit.record`（actor_type=service，actor_id=调用方）；每个被取消的预约发 `m1.reservation.cancelled(reason=BLOCKED)`。
+8. 返回 `{block_id, cancelled_reservations}`。
 
 `DELETE /internal/v1/blocks/{source}/{ref_id}`：设置 `released_at`，为每个座位写 `unblocked`，写审计。已释放或不存在时返回 `released=false`，不报错。释放后同一单号不能再产生新的占用：M2 重新审批、M3 重新维修时使用新的申请或工单号。
 

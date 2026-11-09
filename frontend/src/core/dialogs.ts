@@ -4,10 +4,20 @@
  */
 import { ElMessageBox, type ElMessageBoxOptions } from "element-plus";
 
-/** 用户确认返回 true，取消或关闭返回 false。 */
-export async function confirmAction(message: string, title = "确认", options?: ElMessageBoxOptions): Promise<boolean> {
+/**
+ * action：按钮写明动作，确认按钮为动作名（如"取消预约"），另一个按钮为"返回"。
+ * 动作本身是"取消"时必须写，否则"确定 / 取消"两个按钮分不清哪个是执行。
+ */
+export type DialogOptions = ElMessageBoxOptions & { action?: string };
+
+function withButtons({ action, ...options }: DialogOptions): ElMessageBoxOptions {
+  return action ? { confirmButtonText: action, cancelButtonText: "返回", ...options } : options;
+}
+
+/** 用户确认返回 true，取消或关闭返回 false。标题默认为 action（未给出时为"确认"）。 */
+export async function confirmAction(message: string, { title, ...options }: DialogOptions = {}): Promise<boolean> {
   try {
-    await ElMessageBox.confirm(message, title, options);
+    await ElMessageBox.confirm(message, title ?? options.action ?? "确认", withButtons(options));
     return true;
   } catch {
     return false;
@@ -21,7 +31,7 @@ export async function confirmAction(message: string, title = "确认", options?:
 export async function promptText(
   message: string,
   title: string,
-  { minLength = 0, maxLength, ...options }: ElMessageBoxOptions & { minLength?: number; maxLength?: number } = {},
+  { minLength = 0, maxLength, ...options }: DialogOptions & { minLength?: number; maxLength?: number } = {},
 ): Promise<string | null> {
   try {
     const { value } = await ElMessageBox.prompt(message, title, {
@@ -31,7 +41,7 @@ export async function promptText(
         if (maxLength !== undefined && text.length > maxLength) return `不能超过 ${maxLength} 字`;
         return true;
       },
-      ...options,
+      ...withButtons(options),
     });
     return (value ?? "").trim();
   } catch {

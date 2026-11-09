@@ -3727,7 +3727,7 @@
     },
     "/internal/v1/blocks": {
       "post": {
-        "description": "在 [start_at, end_at) 内下架该教室全部座位，并记录写入来源 (source, ref_id)。\n\n时段内已有的个人预约自动取消（cancel_reason=BLOCKED_BY_M2/M3）、通知学生、不记违约，\n在返回值中列出。\n\n先按幂等键处理：同一幂等键 + 同样的请求，无论占用后来是否已释放，都原样重放首次结果（200）；\n同一幂等键 + 不同的请求返回 409 `IDEMPOTENCY_KEY_REUSED`。M2、M3 的键按单号固定\n（`m2-app-{id}-occupy`、`m3-order-{id}-block`），因此它们重发同一单号只会走到这一步。\n换了幂等键时再按 (source, ref_id) 处理：一个单号只对应一次占用，已释放返回 409 `BLOCK_ALREADY_RELEASED`，\n请求不同返回 409 `BLOCK_REFERENCE_CONFLICT`，相同则返回已有的 block_id 且不再取消预约。\n\n其他错误：403 `BLOCK_SOURCE_FORBIDDEN`（source 与调用方不符）；404 `NOT_FOUND`（教室不存在）；\n422 `VALIDATION_ERROR`（end_at 不晚于 start_at）。",
+        "description": "在 [start_at, end_at) 内下架该教室全部座位，并记录写入来源 (source, ref_id)。\n\n时段内已有的个人预约自动取消（cancel_reason=BLOCKED_BY_M2/M3）、通知学生、不记违约，\n在返回值中列出。\n\n先按幂等键处理：同一幂等键 + 同样的请求，无论占用后来是否已释放，都原样重放首次结果（200）；\n同一幂等键 + 不同的请求返回 409 `IDEMPOTENCY_KEY_REUSED`。M2、M3 的键按单号固定\n（`m2-app-{id}-occupy`、`m3-order-{id}-block`），因此它们重发同一单号只会走到这一步。\n换了幂等键时再按 (source, ref_id) 处理：一个单号只对应一次占用，已释放返回 409 `BLOCK_ALREADY_RELEASED`，\n请求不同返回 409 `BLOCK_REFERENCE_CONFLICT`，相同则返回已有的 block_id 且不再取消预约。\n\nM2 的新占用与该教室未释放的 M3 维修下架时段重叠（维修下架 end_at 为空，即从维修开始起无限期）时\n返回 409 `ROOM_UNDER_MAINTENANCE`；反过来 M3 下架不受 M2 占用限制（紧急维修优先），照常取消时段内的预约。\n\n其他错误：403 `BLOCK_SOURCE_FORBIDDEN`（source 与调用方不符）；404 `NOT_FOUND`（教室不存在）；\n422 `VALIDATION_ERROR`（end_at 不晚于 start_at）。",
         "operationId": "create_block_internal_v1_blocks_post",
         "parameters": [
           {

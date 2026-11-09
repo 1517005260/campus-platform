@@ -296,6 +296,56 @@ def test_m2_occupation_cancels_with_m2_reason(client, db):
     assert _payload(db, "notification.send", reservation.id)["params"]["block_source"] == "M2_OCCUPY"
 
 
+def _maintenance(client, room: Room, start_hour: int, as_m3) -> None:
+    """M3 开始维修：从 start_hour 起无限期下架（end_at 为空）。"""
+    body = _block_body(room) | {"start_at": at_hour(DAY, start_hour).isoformat(), "end_at": None}
+    assert client.post("/internal/v1/blocks", json=body, headers=as_m3).status_code == 200
+
+
+def _occupy(client, room: Room, start_hour: int, end_hour: int, ref_id: int = 9):
+    body = _block_body(room, source="M2_OCCUPY", ref_id=ref_id) | {
+        "start_at": at_hour(DAY, start_hour).isoformat(),
+        "end_at": at_hour(DAY, end_hour).isoformat(),
+    }
+    headers = service_headers("m2-room", M2_KEY, idempotency_key=f"m2-app-{ref_id}-occupy")
+    return client.post("/internal/v1/blocks", json=body, headers=headers)
+
+
+def test_m2_occupation_rejected_from_maintenance_start_until_released(client, db, as_m3):
+    room, (seat, _) = _seed_room(db)
+    reservation = _reserve(db, room, seat, user_id=41, start_hour=12, end_hour=13)
+    _maintenance(client, room, 12, as_m3)
+
+    adjacent = _occupy(client, room, 10, 12, ref_id=9)  # 结束于维修开始时刻，不重叠
+    overlapping = _occupy(client, room, 11, 13, ref_id=10)
+    much_later = _occupy(client, room, 20, 22, ref_id=11)  # 维修下架无限期
+
+    assert adjacent.status_code == 200, adjacent.text
+    for rejected in (overlapping, much_later):
+        assert (rejected.status_code, rejected.json()["code"]) == (409, "ROOM_UNDER_MAINTENANCE")
+    db.expire_all()
+    assert _count(db, RoomBlock, RoomBlock.source == "M2_OCCUPY") == 1
+    assert _count(db, SeatStatusLog, SeatStatusLog.source == "M2_OCCUPY") == 2  # 只有相邻的那次
+    assert db.get(Reservation, reservation.id).cancel_reason == "BLOCKED_BY_M3"
+
+    assert client.delete("/internal/v1/blocks/M3_MAINTENANCE/7", headers=as_m3).json() == {"released": True}
+    # 被拒绝的请求没有记下幂等结果，维修结束后原样重试即可占用
+    assert _occupy(client, room, 20, 22, ref_id=11).status_code == 200
+
+
+def test_maintenance_still_blocks_room_already_occupied_by_m2(client, db, as_m3):
+    """紧急维修优先：M3 下架不受 M2 占用限制。"""
+    room, (seat, _) = _seed_room(db)
+    assert _occupy(client, room, 10, 12).status_code == 200
+    later = _reserve(db, room, seat, user_id=41, start_hour=14, end_hour=15)
+
+    _maintenance(client, room, 9, as_m3)
+
+    db.expire_all()
+    assert _count(db, RoomBlock, RoomBlock.released_at.is_(None)) == 2
+    assert db.get(Reservation, later.id).cancel_reason == "BLOCKED_BY_M3"
+
+
 def test_service_cannot_release_another_modules_block(client, db, as_m3):
     room, _ = _seed_room(db)
     assert client.post("/internal/v1/blocks", json=_block_body(room), headers=as_m3).status_code == 200
