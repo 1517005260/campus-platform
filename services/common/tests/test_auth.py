@@ -45,11 +45,13 @@ def test_users_with_perm_filters_by_dept(client, db):
     all_approvers = client.get("/internal/v1/users?perm=room:approve", headers=headers).json()
     dept1 = client.get("/internal/v1/users?perm=room:approve&dept_id=1", headers=headers).json()
     dept2 = client.get("/internal/v1/users?perm=room:approve&dept_id=2", headers=headers).json()
+    school = client.get("/internal/v1/users?perm=room:approve_school", headers=headers).json()
     names = {u["username"] for u in all_approvers}
-    assert {"dept_approver", "approver_math", "school_approver", "admin"} <= names
-    assert "student" not in names and "teacher" not in names
+    assert {"dept_approver", "approver_math", "admin"} <= names
+    assert not names & {"school_approver", "student", "teacher"}
     assert [u["username"] for u in dept1] == ["dept_approver"]
     assert [u["username"] for u in dept2] == ["approver_math"]
+    assert [u["username"] for u in school] == ["school_approver", "admin"]
 
 
 def test_disabled_user_cannot_log_in(client, db):

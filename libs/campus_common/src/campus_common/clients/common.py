@@ -21,7 +21,7 @@ class CommonClient:
     def __init__(self, settings: ServiceSettings):
         self._settings = settings
         self.stub_enabled = settings.stub_clients  # 为真时返回桩数据、不发网络请求
-        self._http = ServiceClient(settings.common_url, settings)
+        self._http = ServiceClient(settings.common_url, settings, "公共服务")
 
     async def get_user(self, user_id: int) -> UserContact:
         if self.stub_enabled:

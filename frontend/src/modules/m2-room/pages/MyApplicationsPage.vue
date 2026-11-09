@@ -1,22 +1,31 @@
 <script setup lang="ts">
+/** 我的申请：资格提示、列表、查看详情、撤回审批中的申请或取消已通过且未开始的申请。 */
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
+import PaginatedTable from "@/core/components/PaginatedTable.vue";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
+import { usePagedList } from "@/core/pagedList";
 
-import { applicationStatusLabel, roomApi, type Application } from "../api";
+import { applicationStatusLabel, roomApi, type Application, type Eligibility } from "../api";
+import { withdrawAction, withdrawApplication } from "../withdraw";
 
-const items = ref<Application[]>([]);
-const eligible = ref<{ eligible: boolean; reasons: string[] } | null>(null);
+const router = useRouter();
+const eligible = ref<Eligibility | null>(null);
+const { items, total, page, size, loading, load } = usePagedList((p) =>
+  roomApi.GET("/api/v1/room/applications/mine", { params: { query: p } }).then((r) => r.data!),
+);
+
+async function withdraw(a: Application) {
+  if (await withdrawApplication(a)) await load();
+}
 
 onMounted(async () => {
+  void load();
   try {
-    const [mine, elig] = await Promise.all([
-      roomApi.GET("/api/v1/room/applications/mine", { params: { query: { page: 1, size: 50 } } }),
-      roomApi.GET("/api/v1/room/eligibility"),
-    ]);
-    items.value = mine.data!.items;
-    eligible.value = elig.data!;
+    const { data } = await roomApi.GET("/api/v1/room/eligibility");
+    eligible.value = data!;
   } catch (e) {
     showError(e);
   }
@@ -31,20 +40,38 @@ onMounted(async () => {
     :closable="false"
     style="margin-bottom: 12px"
   />
-  <el-table :data="items">
-    <el-table-column label="申请号" prop="id" width="90" />
-    <el-table-column label="教室" prop="room_id" width="90" />
+
+  <div style="margin-bottom: 12px">
+    <el-button type="primary" @click="router.push('/room/apply')">提交新申请</el-button>
+  </div>
+
+  <PaginatedTable :data="items" :loading="loading" :total="total" v-model:page="page" v-model:size="size">
+    <el-table-column label="申请号" prop="id" width="80" />
+    <el-table-column label="教室" prop="room_name" width="160" />
     <el-table-column label="开始">
       <template #default="{ row }">{{ fmtTime(row.start_at) }}</template>
     </el-table-column>
-    <el-table-column label="用途" prop="purpose" />
-    <el-table-column label="状态" width="110">
-      <template #default="{ row }">{{
-        applicationStatusLabel[row.status as Application["status"]] ?? row.status
-      }}</template>
+    <el-table-column label="结束">
+      <template #default="{ row }">{{ fmtTime(row.end_at) }}</template>
     </el-table-column>
-    <el-table-column label="审批进度" width="110">
-      <template #default="{ row }">{{ row.current_level }} / {{ row.total_levels }}</template>
+    <el-table-column label="用途" prop="purpose" show-overflow-tooltip />
+    <el-table-column label="状态" width="100">
+      <template #default="{ row }">
+        {{ applicationStatusLabel[row.status as Application["status"]] ?? row.status }}
+      </template>
     </el-table-column>
-  </el-table>
+    <el-table-column label="进度" width="70">
+      <template #default="{ row }">{{ row.current_level }}/{{ row.total_levels }}</template>
+    </el-table-column>
+    <el-table-column label="操作" width="130">
+      <template #default="{ row }">
+        <el-button size="small" link type="primary" @click="router.push(`/room/applications/${row.id}`)">
+          详情
+        </el-button>
+        <el-button v-if="withdrawAction(row)" size="small" link type="danger" @click="withdraw(row)">
+          {{ withdrawAction(row)!.label }}
+        </el-button>
+      </template>
+    </el-table-column>
+  </PaginatedTable>
 </template>

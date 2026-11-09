@@ -144,8 +144,9 @@ def test_dept_name_unique(client, db, admin):
     assert client.patch("/api/v1/admin/depts/99", json={"name": "x"}, headers=admin).status_code == 404
 
 
-def test_dept_maintenance_requires_admin_user(client, db):
-    approver = headers_for(6, ["room:approve"])
+@pytest.mark.parametrize("perm", ["room:approve", "room:approve_school"])
+def test_dept_maintenance_requires_admin_user(client, db, perm):
+    approver = headers_for(6, [perm])
     assert client.get("/api/v1/admin/depts", headers=approver).status_code == 200
     assert client.post("/api/v1/admin/depts", json={"name": "x"}, headers=approver).status_code == 403
 

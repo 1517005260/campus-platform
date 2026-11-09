@@ -252,6 +252,19 @@
         "title": "Channels",
         "type": "array"
       },
+      "dept_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "description": "与 perm 一起使用：只通知该院系中拥有 perm 的用户，例如院系级审批人；没有 perm 时忽略",
+        "title": "Dept Id"
+      },
       "params": {
         "additionalProperties": true,
         "description": "模板参数",

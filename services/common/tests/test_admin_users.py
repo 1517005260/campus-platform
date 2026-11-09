@@ -75,6 +75,34 @@ def test_create_validates_fields(client, db, admin, overrides, ok):
     assert create(client, admin, **overrides).status_code == (201 if ok else 422)
 
 
+EMAIL_MESSAGE = "邮箱格式不正确（形如 name@example.com，最多 100 个字符）"
+PASSWORD_MESSAGE = "密码长度须为 8–72 个字符"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("email", "not-an-email", EMAIL_MESSAGE),
+        ("email", "a@" + "b" * 99, EMAIL_MESSAGE),  # 101 个字符
+        ("password", "1234567", PASSWORD_MESSAGE),
+        ("password", "1" * 73, PASSWORD_MESSAGE),
+    ],
+)
+def test_create_and_update_explain_email_and_password_errors_in_chinese(
+    client, db, admin, field, value, message
+):
+    created = create(client, admin, **{field: value})
+    updated = client.patch("/api/v1/admin/users/6", json={field: value}, headers=admin)
+    for resp in (created, updated):
+        assert resp.status_code == 422
+        assert [(d["loc"][-1], d["msg"]) for d in resp.json()["details"]] == [(field, message)]
+
+
+@pytest.mark.parametrize(("field", "value"), [("email", "a@" + "b" * 98), ("password", "1" * 72)])
+def test_email_and_password_at_maximum_length_accepted(client, db, admin, field, value):
+    assert create(client, admin, **{field: value}).status_code == 201
+
+
 def test_list_filters_and_paginates(client, db, admin):
     by_dept = client.get("/api/v1/admin/users?dept_id=2&role=student", headers=admin).json()
     assert {u["username"] for u in by_dept["items"]} == {"student2", "22300180015", "23300180032"}

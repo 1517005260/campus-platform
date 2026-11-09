@@ -12,6 +12,16 @@ from campus_common.timeutil import to_biz
 BlockSource = Literal["M2_OCCUPY", "M3_MAINTENANCE"]
 
 
+class M1Seat(BaseModel):
+    id: int
+
+
+class M1OpenHour(BaseModel):
+    weekday: int  # 0 = 周一
+    open_hour: int
+    close_hour: int  # 当天 [open_hour, close_hour) 开放
+
+
 class M1Room(BaseModel):
     id: int
     building: str
@@ -21,6 +31,8 @@ class M1Room(BaseModel):
     capacity: int
     is_whole_bookable: bool
     status: str
+    open_hours: list[M1OpenHour] = []  # 每周开放时间，没有某个 weekday 表示当天不开放
+    seats: list[M1Seat] = []  # 全部座位（含停用的）
 
 
 class M1Reservation(BaseModel):
@@ -46,6 +58,8 @@ STUB_ROOM = M1Room(
     capacity=60,
     is_whole_bookable=True,
     status="enabled",
+    open_hours=[M1OpenHour(weekday=weekday, open_hour=8, close_hour=22) for weekday in range(7)],
+    seats=[M1Seat(id=seat_id) for seat_id in range(1, 61)],
 )
 
 
@@ -53,7 +67,7 @@ class M1Client:
     def __init__(self, settings: ServiceSettings):
         self._settings = settings
         self.stub_enabled = settings.stub_clients  # 为真时返回桩数据、不发网络请求
-        self._http = ServiceClient(settings.m1_url, settings)
+        self._http = ServiceClient(settings.m1_url, settings, "M1 自习座位服务")
 
     async def get_room(self, room_id: int) -> M1Room:
         if self.stub_enabled:

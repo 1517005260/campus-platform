@@ -15,7 +15,7 @@
 | M2 整教室预约与审批 | `services/m2-room` | 8002 | `twllif` | 资格门槛、申请、多级审批、超时撤销；审批通过后经 M1 占用教室 |
 | M3 物业报修工单 | `services/m3-repair` | 8003 | `lanxin-yi` | 上报、派单、维修中、超时升级、验收评价；维修中经 M1 下架教室 |
 | 前端 | `frontend` | 3000（开发） | `Chadish` | Vue 3 单页应用，按模块分目录，见 [`docs/design/frontend.md`](docs/design/frontend.md) |
-| 网关 | `deploy/gateway` | 8000 | E（运维） | 唯一对外入口，按路径转发，不转发 `/internal` |
+| 网关 | `deploy/gateway` | 8000 | `haotian-ying`（运维） | 唯一对外入口，按路径转发，不转发 `/internal` |
 
 公共层 D 的归属：拆成独立的 common 服务（RBAC、通知、审计）并连同公共库 `libs/campus_common` 由专职负责人 `1517005260` 负责；空间与座位主数据归 M1。理由与备选方案见 [ADR-001](docs/adr/001-公共层归属.md)。负责人中的字母是尚未确认成员的占位，见 [`docs/process.md`](docs/process.md) 第 1 节。
 

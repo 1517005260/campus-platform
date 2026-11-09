@@ -13,7 +13,14 @@ from typing import get_args
 
 import pytest
 from campus_common.clients.common import CommonClient, UserBrief, UserContact
-from campus_common.clients.m1 import BlockSource, M1BlockResult, M1Client, M1Reservation, M1Room
+from campus_common.clients.m1 import (
+    BlockSource,
+    M1BlockResult,
+    M1Client,
+    M1OpenHour,
+    M1Reservation,
+    M1Room,
+)
 from campus_common.settings import ServiceSettings
 from campus_common.testing import record_service_calls
 from pydantic import BaseModel
@@ -62,8 +69,21 @@ def assert_call_matches(spec: dict, call: tuple[str, str, dict]) -> dict:
 
 
 def assert_reader_fields(spec: dict, op: dict, model: type[BaseModel]) -> None:
-    provided = set(response_schema(spec, op)["properties"])
-    assert set(model.model_fields) <= provided, f"{model.__name__} 读取了提供方未返回的字段"
+    assert_model_fields(spec, response_schema(spec, op), model)
+
+
+def assert_model_fields(spec: dict, schema: dict, model: type[BaseModel]) -> None:
+    """model 的字段都在提供方的 schema 中；嵌套模型（含列表元素）逐层核对。"""
+    provided = schema["properties"]
+    assert set(model.model_fields) <= set(provided), f"{model.__name__} 读取了提供方未返回的字段"
+    for name, field in model.model_fields.items():
+        nested = next((t for t in (field.annotation, *get_args(field.annotation)) if _is_model(t)), None)
+        if nested is not None:
+            assert_model_fields(spec, resolve(spec, provided[name]), nested)
+
+
+def _is_model(tp: object) -> bool:
+    return isinstance(tp, type) and issubclass(tp, BaseModel)
 
 
 @pytest.fixture
@@ -77,10 +97,30 @@ def common():
 
 
 async def test_m1_room_query(monkeypatch, m1):
-    calls = record_service_calls(monkeypatch, m1, M1Room.model_validate(_room()).model_dump())
-    await m1.get_room(3)
+    calls = record_service_calls(monkeypatch, m1, _room())
+    room = await m1.get_room(3)
     spec = load("m1-seat")
     assert_reader_fields(spec, assert_call_matches(spec, calls[0]), M1Room)
+    assert room.open_hours == [
+        M1OpenHour(weekday=0, open_hour=8, close_hour=22),
+        M1OpenHour(weekday=5, open_hour=9, close_hour=17),
+    ]
+    assert [seat.id for seat in room.seats] == [31, 32]
+
+
+def test_reader_check_covers_nested_models():
+    """嵌套模型读取了提供方没有的字段时同样能发现（open_hours、seats 的元素）。"""
+
+    class Renamed(BaseModel):
+        weekday: int
+        opens_at: int
+
+    class Reader(BaseModel):
+        open_hours: list[Renamed]
+
+    spec = load("m1-seat")
+    with pytest.raises(AssertionError, match="Renamed"):
+        assert_reader_fields(spec, operation(spec, "GET", "/internal/v1/rooms/3"), Reader)
 
 
 async def test_m1_block_create_and_release(monkeypatch, m1):
@@ -151,7 +191,9 @@ async def test_stub_mode_never_touches_network():
         raise AssertionError("桩模式下不应发出请求")
 
     m1._http.request = common._http.request = forbidden
-    assert (await m1.get_room(5)).id == 5
+    room = await m1.get_room(5)
+    assert room.id == 5
+    assert [(h.weekday, h.open_hour, h.close_hour) for h in room.open_hours] == [(d, 8, 22) for d in range(7)]
     block = await m1.create_block(
         source="M3_MAINTENANCE", ref_id=7, room_id=5, start_at=T, end_at=None, reason="r", idempotency_key="k"
     )
@@ -170,6 +212,16 @@ def _room() -> dict:
         "capacity": 10,
         "is_whole_bookable": True,
         "status": "enabled",
+        "floor": 1,
+        "is_study_room": True,
+        "open_hours": [
+            {"weekday": 0, "open_hour": 8, "close_hour": 22},
+            {"weekday": 5, "open_hour": 9, "close_hour": 17},
+        ],
+        "seats": [
+            {"id": 31, "room_id": 3, "code": "A-01", "outlet": "none", "status": "enabled"},
+            {"id": 32, "room_id": 3, "code": "A-02", "outlet": "fixed", "status": "disabled"},
+        ],
     }
 
 

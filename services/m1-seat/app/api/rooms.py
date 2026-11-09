@@ -26,7 +26,9 @@ async def list_rooms(
     is_whole_bookable: bool | None = Query(None, description="M2 申请选教室时传 true"),
     p: PageParams = Depends(page_params),
 ):
-    """院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；停用的教室只有 `seat:room_manage` 可见。"""
+    """院系自习室只对本院系用户可见（按 token 中的 dept_id 过滤）；
+    `seat:checkin_code` 可见所有院系的启用教室；`seat:room_manage`、`seat:stats` 可见全部教室（含停用）。
+    详情、可用性的可见性相同。"""
     return await room_service.list_rooms(
         session,
         user,
@@ -136,7 +138,10 @@ async def get_checkin_code(
     session: SessionDep,
     user=Depends(require_perm("seat:checkin_code")),
 ):
-    """业务日期当天的签到码，当天首次请求时生成。教室不存在：404 `NOT_FOUND`。"""
+    """业务日期当天的签到码，当天首次请求时生成。
+    附签到窗口：预约开始前 `early_minutes` 分钟至开始后 `auto_cancel_min` 分钟（与签到接口同一组参数）。
+
+    教室不存在：404 `NOT_FOUND`。"""
     return await checkin_service.get_checkin_code(session, room_id)
 
 

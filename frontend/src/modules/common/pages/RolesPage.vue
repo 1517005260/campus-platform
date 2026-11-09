@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { computed, onMounted, ref } from "vue";
 
+import { confirmAction } from "@/core/dialogs";
 import { showError } from "@/core/http";
 
 import { commonApi, moduleLabel, type PermissionOut, type RoleOut } from "../api";
@@ -74,11 +75,7 @@ async function save() {
 }
 
 async function remove(role: RoleOut) {
-  try {
-    await ElMessageBox.confirm(`删除角色"${role.name}"？`, "确认");
-  } catch {
-    return;
-  }
+  if (!(await confirmAction(`删除角色"${role.name}"？`))) return;
   try {
     await commonApi.DELETE("/api/v1/admin/roles/{code}", { params: { path: { code: role.code } } });
     ElMessage.success("已删除");

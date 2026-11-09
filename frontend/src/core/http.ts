@@ -60,11 +60,34 @@ export function createApi<Paths extends object>() {
   return client;
 }
 
-/** 把接口错误展示给用户；非 ApiError 原样抛出。附带 request_id 便于反馈问题。 */
+/** 后端参数校验的一条错误（422 VALIDATION_ERROR 的 details 元素；业务错误也可以用同样的结构） */
+interface FieldError {
+  loc?: (string | number)[];
+  msg: string;
+}
+
+/** details 转成一行说明：字符串（或字符串列表，如资格不满足的原因）原样显示；字段错误列表显示为"字段：原因"，
+ * 字段路径去掉 body/query/path 前缀。 */
+function detailText(details: unknown): string {
+  if (typeof details === "string") return details;
+  if (!Array.isArray(details)) return "";
+  return (details as (string | FieldError)[])
+    .filter((d) => typeof d === "string" || typeof d?.msg === "string")
+    .map((d) => {
+      if (typeof d === "string") return d;
+      const field = (d.loc ?? []).slice(1).join(".");
+      const msg = d.msg.replace(/^Value error, /, "");
+      return field ? `${field}：${msg}` : msg;
+    })
+    .join("；");
+}
+
+/** 把接口错误展示给用户（附校验明细和 request_id，便于反馈问题）；非 ApiError 原样抛出。 */
 export function showError(e: unknown): void {
   if (e instanceof ApiError) {
+    const details = detailText(e.body.details);
     const rid = e.body.request_id ? `（请求 ID ${e.body.request_id.slice(0, 8)}）` : "";
-    ElMessage.error(`${e.message}${rid}`);
+    ElMessage.error(`${e.message}${details ? `：${details}` : ""}${rid}`);
     return;
   }
   throw e;

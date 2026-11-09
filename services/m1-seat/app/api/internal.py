@@ -23,9 +23,11 @@ router = APIRouter(prefix="/internal/v1", tags=["internal"], responses=ERROR_RES
 Caller = Annotated[str, Depends(require_service("m2-room", "m3-repair"))]
 
 
-@router.get("/rooms/{room_id}", summary="查询教室", response_model=s.Room)
+@router.get("/rooms/{room_id}", summary="查询教室（含座位）", response_model=s.RoomDetail)
 async def internal_get_room(room_id: int, caller: Caller, session: SessionDep):
-    """教室不存在：404 `NOT_FOUND`。"""
+    """不论启用状态与院系，返回教室及其全部座位（含停用的座位，M3 上报故障时用来校验座位归属）。
+
+    教室不存在：404 `NOT_FOUND`。"""
     return await block_service.get_room(session, room_id)
 
 
@@ -46,6 +48,9 @@ async def create_block(
     （`m2-app-{id}-occupy`、`m3-order-{id}-block`），因此它们重发同一单号只会走到这一步。
     换了幂等键时再按 (source, ref_id) 处理：一个单号只对应一次占用，已释放返回 409 `BLOCK_ALREADY_RELEASED`，
     请求不同返回 409 `BLOCK_REFERENCE_CONFLICT`，相同则返回已有的 block_id 且不再取消预约。
+
+    M2 的新占用与该教室未释放的 M3 维修下架时段重叠（维修下架 end_at 为空，即从维修开始起无限期）时
+    返回 409 `ROOM_UNDER_MAINTENANCE`；反过来 M3 下架不受 M2 占用限制（紧急维修优先），照常取消时段内的预约。
 
     其他错误：403 `BLOCK_SOURCE_FORBIDDEN`（source 与调用方不符）；404 `NOT_FOUND`（教室不存在）；
     422 `VALIDATION_ERROR`（end_at 不晚于 start_at）。

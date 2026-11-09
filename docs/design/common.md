@@ -38,14 +38,14 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 |---|---|
 | common | `admin:user`、`admin:role`、`audit:read` |
 | M1 | `seat:reserve`、`seat:room_manage`、`seat:stats`、`seat:config`、`seat:checkin_code` |
-| M2 | `room:apply`、`room:approve`、`room:flow_manage` |
+| M2 | `room:apply`、`room:approve`（院系级审批）、`room:approve_school`（学校级审批）、`room:flow_manage` |
 | M3 | `repair:report`、`repair:dispatch`、`repair:work`、`repair:manage` |
 
-预置角色（`builtin=true`）：学生、教师、教室管理员、运营管理员、院系审批人、学校审批人、维修调度员、维修工、签到屏、系统管理员。院系审批人与学校审批人权限相同，区别在用户的 `dept_id` 和 M2 审批流中每一级的 `scope`。
+预置角色（`builtin=true`）：学生、教师、教室管理员、运营管理员、院系审批人、学校审批人、维修调度员、维修工、签到屏、系统管理员。院系审批人持有 `room:approve`，学校审批人持有 `room:approve_school`，分别对应 M2 默认审批流中 `scope=dept` 与 `scope=school` 的一级；院系级审批只派给与申请人同院系的审批人。
 
 每个环境的种子都会写入引导管理员 `admin`（系统管理员角色，初始密码 `ADMIN_PASSWORD`，默认 `campus123`），新环境部署后用它登录并创建其他用户；已存在时不改动。
 
-新增权限码的流程：在 `permissions.py` 登记 → seed 在下次部署时写入目录 → 系统管理员在"角色与权限"页面把它分配给角色（包括预置角色）。seed 不修改已存在的角色，避免覆盖线上调整。
+新增权限码的流程：在 `permissions.py` 登记 → seed 在下次部署时写入目录 → 系统管理员在"角色与权限"页面把它分配给角色（包括预置角色）。seed 不修改已存在的角色，避免覆盖线上调整；需要所有已有环境同时生效的预置角色调整写成数据迁移（如 `0003` 把预置学校审批人从 `room:approve` 改为 `room:approve_school`，并给预置系统管理员加上新权限码）。
 
 ### 管理规则（`app/rbac.py`）
 
@@ -81,7 +81,7 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 | `PATCH /api/v1/admin/roles/{code} (name?, perms?) -> RoleOut` \| `admin:role` | perms 整体替换 |
 | `DELETE /api/v1/admin/roles/{code} () -> 204` \| `admin:role` | 只能删除无用户的自定义角色 |
 | `GET /api/v1/admin/permissions () -> [PermissionOut]` \| `admin:role` | |
-| `GET /api/v1/admin/depts () -> [DeptOut]` \| `admin:user` / `room:approve` / `seat:room_manage` | |
+| `GET /api/v1/admin/depts () -> [DeptOut]` \| `admin:user` / `room:approve` / `room:approve_school` / `seat:room_manage` | |
 | `POST /api/v1/admin/depts (name) -> DeptOut` \| `admin:user` | |
 | `PATCH /api/v1/admin/depts/{id} (name) -> DeptOut` \| `admin:user` | 改名 |
 | `GET /api/v1/notifications (unread?, page, size) -> Page[NotificationOut]` 登录即可 | 只看自己的，最新在前 |
@@ -100,7 +100,7 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 
 | 队列 | 绑定 | 处理 |
 |---|---|---|
-| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个收件人写一条 `notifications`。收件人 = `user_ids` ∪ 拥有 `perm` 的全部启用用户（`perm` 可选，在处理消息时用与 `GET /internal/v1/users?perm=` 相同的查询 `rbac.perm_holders` 解析，同一人只写一条）；发送方因此不必为查收件人同步调用 common |
+| `common.notification.send` | `campus.events` / `notification.send` | 按 template + params 渲染标题与正文，为每个收件人写一条 `notifications`。收件人 = `user_ids` ∪ 拥有 `perm` 的全部启用用户（`perm` 可选，同时给出 `dept_id` 时只取该院系的；在处理消息时用与 `GET /internal/v1/users?perm=&dept_id=` 相同的查询 `rbac.perm_holders` 解析，同一人只写一条）；发送方因此不必为查收件人同步调用 common |
 | `common.audit.record` | `campus.events` / `audit.record` | 写 `audit_logs`，保留 request_id 与 message_id |
 
 两者都先 `claim_message` 登记 inbox，与业务写入同一事务。队列由公共库 `campus_common.topology` 定义，消费者用 `campus_common.consuming.subscribe()` 注册，失败按错误分类处理（[ADR-010](../adr/010-消息拓扑与失败重试.md)）：
@@ -134,7 +134,16 @@ common 不在线时：已登录用户的请求不受影响（各服务本地验 
 | `repair.rejected` | 维修验收未通过 | order_id、category、reason、blocks_room |
 | `repair.accepted` | 维修工单已验收 | order_id、category、rating、by_admin（区分报修人验收与管理员代验收） |
 | `repair.escalated` | 报修工单超时升级 | order_id、category、status、since、timeout_hours、level |
-| `room.*` | 由 M2 提出后登记 | |
+| `room.application_submitted` | 新的整教室申请待审批 | 公共参数、applicant、attendees、level |
+| `room.approval_requested` | 整教室申请待你审批 | 公共参数、applicant、attendees、level（现在等待的级别） |
+| `room.level_approved` | 整教室申请通过一级审批 | 公共参数、level（通过的级别）、next_level |
+| `room.application_approved` | 整教室申请已批准 | 公共参数 |
+| `room.application_rejected` | 整教室申请被驳回 | 公共参数、level、comment（可为空，为空时写明审批人未填写意见） |
+| `room.application_withdrawn` | 整教室申请已撤回 | 公共参数、applicant、level |
+| `room.application_cancelled` | 已批准的整教室申请被取消 | 公共参数、applicant |
+| `room.application_expired` | 整教室申请已超时失效；按 cause 区分：`deadline` 当前级别超过审批时限，`started` 申请时段开始时仍未审批完成 | 公共参数、level、cause |
+
+`room.*` 的公共参数：application_id、room（"楼宇 名称"）、purpose、start_at、end_at；applicant 为申请人姓名。时段结束不在同一天时写出结束日期（如"11月6日 22:00–11月7日 08:00"）。
 
 未知模板或缺少参数时仍然落库（标题用模板编码，正文为参数的 JSON），并记录警告，避免因模板缺失丢消息。
 

@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 
 import { useAuthStore } from "@/core/auth/store";
+import PaginatedTable from "@/core/components/PaginatedTable.vue";
+import { confirmAction } from "@/core/dialogs";
 import { fmtTime } from "@/core/format";
 import { showError } from "@/core/http";
+import { usePagedList } from "@/core/pagedList";
 
 import { commonApi, type DeptOut, type RoleOut, type UserAdmin } from "../api";
 
 const auth = useAuthStore();
-const users = ref<UserAdmin[]>([]);
-const total = ref(0);
-const loading = ref(false);
 const depts = ref<DeptOut[]>([]);
 const roles = ref<RoleOut[]>([]);
 
@@ -21,31 +21,23 @@ const filters = reactive({
   role: undefined as string | undefined,
   active: undefined as boolean | undefined,
 });
-const page = ref(1);
-const size = 20;
 
 const deptName = computed(() => Object.fromEntries(depts.value.map((d) => [d.id, d.name])));
 const roleName = computed(() => Object.fromEntries(roles.value.map((r) => [r.code, r.name])));
 
-async function load() {
-  loading.value = true;
-  try {
-    const { data } = await commonApi.GET("/api/v1/admin/users", {
-      params: { query: { ...filters, keyword: filters.keyword || undefined, page: page.value, size } },
-    });
-    users.value = data!.items;
-    total.value = data!.total;
-  } catch (e) {
-    showError(e);
-  } finally {
-    loading.value = false;
-  }
-}
-
-function search() {
-  page.value = 1;
-  load();
-}
+const {
+  items: users,
+  total,
+  page,
+  size,
+  loading,
+  load,
+  reload,
+} = usePagedList((p) =>
+  commonApi
+    .GET("/api/v1/admin/users", { params: { query: { ...filters, keyword: filters.keyword || undefined, ...p } } })
+    .then((r) => r.data!),
+);
 
 // ---- 新建 / 编辑资料 ----
 const editDialog = ref(false);
@@ -105,6 +97,7 @@ async function save() {
 const roleDialog = ref(false);
 const roleTarget = ref<UserAdmin | null>(null);
 const roleCodes = ref<string[]>([]);
+const savingRoles = ref(false);
 
 function openRoles(u: UserAdmin) {
   roleTarget.value = u;
@@ -113,6 +106,7 @@ function openRoles(u: UserAdmin) {
 }
 
 async function saveRoles() {
+  savingRoles.value = true;
   try {
     await commonApi.PUT("/api/v1/admin/users/{user_id}/roles", {
       params: { path: { user_id: roleTarget.value!.id } },
@@ -123,20 +117,16 @@ async function saveRoles() {
     await load();
   } catch (e) {
     showError(e);
+  } finally {
+    savingRoles.value = false;
   }
 }
 
 // ---- 停用 / 启用 ----
 async function toggleActive(u: UserAdmin) {
   const action = u.active ? "停用" : "启用";
-  try {
-    await ElMessageBox.confirm(
-      u.active ? `停用后 ${u.name} 不能再登录（已登录的会话到期前仍有效）。确认停用？` : `启用 ${u.name}？`,
-      action,
-    );
-  } catch {
-    return;
-  }
+  const message = u.active ? `停用后 ${u.name} 不能再登录（已登录的会话到期前仍有效）。确认停用？` : `启用 ${u.name}？`;
+  if (!(await confirmAction(message, { action }))) return;
   try {
     await commonApi.PATCH("/api/v1/admin/users/{user_id}", {
       params: { path: { user_id: u.id } },
@@ -162,7 +152,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-form inline @submit.prevent="search">
+  <el-form inline @submit.prevent="reload">
     <el-form-item>
       <el-input v-model="filters.keyword" placeholder="用户名或姓名" clearable style="width: 180px" />
     </el-form-item>
@@ -188,7 +178,7 @@ onMounted(async () => {
     </el-form-item>
   </el-form>
 
-  <el-table :data="users" v-loading="loading">
+  <PaginatedTable :data="users" :loading="loading" :total="total" v-model:page="page" v-model:size="size">
     <el-table-column label="ID" prop="id" width="60" />
     <el-table-column label="用户名" prop="username" width="140" />
     <el-table-column label="姓名" prop="name" width="140" />
@@ -224,15 +214,7 @@ onMounted(async () => {
         </el-button>
       </template>
     </el-table-column>
-  </el-table>
-  <el-pagination
-    v-model:current-page="page"
-    class="pager"
-    layout="total, prev, pager, next"
-    :page-size="size"
-    :total="total"
-    @current-change="load"
-  />
+  </PaginatedTable>
 
   <el-dialog v-model="editDialog" :title="editing ? `编辑用户：${editing.username}` : '新建用户'" width="520px">
     <el-form label-width="80px">
@@ -272,14 +254,7 @@ onMounted(async () => {
     </el-checkbox-group>
     <template #footer>
       <el-button @click="roleDialog = false">取消</el-button>
-      <el-button type="primary" @click="saveRoles">保存</el-button>
+      <el-button type="primary" :loading="savingRoles" @click="saveRoles">保存</el-button>
     </template>
   </el-dialog>
 </template>
-
-<style scoped>
-.pager {
-  margin-top: 12px;
-  justify-content: flex-end;
-}
-</style>

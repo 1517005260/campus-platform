@@ -16,7 +16,7 @@ M3 管理报修工单的完整生命周期。工单引用 M1 的 `room_id`（可
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | `work_orders` | reporter_id, room_id, seat_id?, category, description, photos, status, blocks_room, assignee_id, deadline_at, escalation_level, rating, rating_comment, completed_at, closed_by, status_changed_at, last_escalated_at, block_start_at, version | version 乐观锁；`status_changed_at` / `last_escalated_at` 是超时升级的计时起点；`block_start_at` 是经 M1 下架的起点，首次尝试前写入，重试沿用 |
-| `work_order_events` | order_id, at, actor_id?, action, from_status, to_status, note | 时间线；升级、派单、状态变化都记录 |
+| `work_order_events` | order_id, at, actor_id?, action, from_status, to_status, note | 时间线；升级、派单、状态变化都记录。action 取值：report、cancel、dispatch、start、complete、accept（报修人验收）、admin_accept（管理员代验收）、reject（验收不通过）、escalate |
 | `user_snapshots` | id, username, name, dept_id | 工单上出现过的人（报修人、操作人、维修工）的显示信息，参与工单时写入或刷新（来自 token 或派单时 common 返回的维修工）；读接口据此显示姓名，不调用 common。改名后在此人下次操作工单时更新；迁移前已有的工单缺快照时只显示 ID |
 | `settings` | key, value | 分类、升级规则、代验收时长，默认值见 `schemas.RepairSettings` |
 | `outbox` | | |
@@ -40,12 +40,12 @@ stateDiagram-v2
 
 | 规则 | 说明 |
 |---|---|
-| 上报 | 教室必须在 M1 存在；分类必须在配置的分类列表中 |
+| 上报 | 教室必须在 M1 存在；填了座位时座位必须属于该教室（M1 内部教室接口返回的 `seats`）；分类必须在配置的分类列表中 |
 | 可见性 | 报修人本人、被指派的维修工、`repair:dispatch` / `repair:manage` 可见。先按路由权限码鉴权：没有接口所需权限码的用户无论工单号是什么都是 403；有权限码但看不到该工单时 404 `NOT_FOUND`（不暴露工单是否存在）；看得到但无权执行该操作时 403（`FORBIDDEN` / `NOT_ASSIGNEE`） |
 | 取消 | 只有报修人本人（否则 403 `FORBIDDEN`）、只在 submitted 状态 |
 | 派单 | 只在 submitted 状态；维修工必须拥有 `repair:work`（调用 common 校验）；deadline_at 必须晚于现在（等于现在也拒绝） |
 | 开始、完工 | 只有被指派的维修工（否则 403 `NOT_ASSIGNEE`） |
-| 验收 | 报修人本人；或在 `completed_at + admin_accept_after_hours` 之时及之后由 `repair:manage` 代验收（`closed_by` 记录实际操作人）。验收不通过只能由报修人本人（否则 403 `FORBIDDEN`） |
+| 验收 | 报修人本人；或在 `completed_at + admin_accept_after_hours` 之时及之后由 `repair:manage` 代验收（`closed_by` 记录实际操作人，时间线动作为 `admin_accept`）。验收不通过只能由报修人本人（否则 403 `FORBIDDEN`） |
 | 升级 | 按 `escalation_rules`：计时起点为 `max(status_changed_at, last_escalated_at)`，起点 + `timeout_hours` 到达（含该时刻）时升级一次；每次升级在时间线留记录，下一次升级从上次升级时间重新计时；状态变化重新计时。每个状态只能配置一条规则（上次升级时间按工单记录，同一状态的多条规则会互相重置计时），重复时保存配置返回 422 `VALIDATION_ERROR` |
 | 下架时机 | 进入 in_progress 时下架，closed 时恢复；验收不通过退回 in_progress 时保持下架；`blocks_room=false` 的工单从不调用 M1 |
 
@@ -72,6 +72,7 @@ stateDiagram-v2
 | 错误码 | 状态 | 场景 |
 |---|---|---|
 | `ROOM_NOT_FOUND` | 400 | 上报时 M1 中没有该教室 |
+| `SEAT_NOT_IN_ROOM` | 400 | 上报的座位不存在或不属于该教室 |
 | `UNKNOWN_CATEGORY` | 400 | 上报的分类不在配置中 |
 | `DEADLINE_NOT_FUTURE` | 400 | 派单截止时间不晚于现在 |
 | `ASSIGNEE_NOT_WORKER` | 400 | 派单对象没有 `repair:work` |
@@ -79,7 +80,7 @@ stateDiagram-v2
 | `FORBIDDEN` | 403 | 看得到工单但不是报修人（取消、验收、验收不通过） |
 | `NOT_ASSIGNEE` | 403 | 看得到工单但不是被指派的维修工（开始、完工） |
 | `ADMIN_ACCEPT_TOO_EARLY` | 403 | 管理员代验收时间未到 |
-| `ORDER_STATE_CONFLICT` | 409 | 当前状态不允许该操作 |
+| `ORDER_STATE_CONFLICT` | 409 | 当前状态不允许该操作（提示中的状态为中文名） |
 | `UPSTREAM_UNAVAILABLE` / `UPSTREAM_ERROR` | 502 | M1（上报、开始、验收）或 common（派单）不可达或拒绝调用 |
 
 M1 的其他业务错误（400/404/409）原样返回。

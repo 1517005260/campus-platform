@@ -201,13 +201,62 @@ def test_report_when_m1_unreachable_is_502(client, db, as_reporter, monkeypatch)
     assert (resp.status_code, resp.json()["code"]) == (502, "UPSTREAM_UNAVAILABLE")
 
 
-def test_settings_reject_two_escalation_rules_for_one_status(client, db, as_manager):
+@pytest.mark.parametrize("seat_id", [None, 11, 12])
+def test_report_accepts_no_seat_or_a_seat_of_the_room(client, db, as_reporter, m1_calls, seat_id):
+    order_id = report(client, as_reporter, seat_id=seat_id)
+    assert db.scalar(select(WorkOrder.seat_id).where(WorkOrder.id == order_id)) == seat_id
+
+
+@pytest.mark.parametrize("seat_id", [10, 13, 9999])
+def test_report_rejects_seat_outside_the_room(client, db, as_reporter, m1_calls, seat_id):
+    resp = client.post(
+        ORDERS,
+        json={"room_id": 3, "seat_id": seat_id, "category": "空调", "description": "不制冷"},
+        headers=as_reporter,
+    )
+    assert (resp.status_code, resp.json()["code"]) == (400, "SEAT_NOT_IN_ROOM")
+    assert db.scalar(select(WorkOrder.id)) is None
+
+
+def _rule(status="dispatched", timeout_hours=24, **extra) -> dict:
+    return {"status": status, "timeout_hours": timeout_hours} | extra
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"escalation_rules": [_rule(), _rule(timeout_hours=48)]},
+        {"escalation_rules": [_rule(timeout_hours=0)]},
+        {"escalation_rules": [_rule(notify_perm="")]},
+        {"escalation_rules": [_rule(notify_perm="管理员")]},
+        {"escalation_rules": [_rule(notify_perm="repair")]},
+        {"escalation_rules": [_rule(notify_perm="seat:stats")]},
+        {"categories": []},
+        {"categories": [""]},
+        {"categories": ["  "]},
+        {"categories": ["x" * 31]},
+        {"categories": ["空调", " 空调 "]},
+        {"admin_accept_after_hours": 0},
+        {"admin_accept_after_hours": -1},
+    ],
+)
+def test_settings_reject_invalid_values_and_keep_current(client, db, as_manager, change):
     current = client.get("/api/v1/repair/settings", headers=as_manager).json()
-    rules = [{"status": "dispatched", "timeout_hours": 24}, {"status": "dispatched", "timeout_hours": 48}]
-    body = current | {"escalation_rules": rules}
-    resp = client.put("/api/v1/repair/settings", json=body, headers=as_manager)
+    resp = client.put("/api/v1/repair/settings", json=current | change, headers=as_manager)
     assert (resp.status_code, resp.json()["code"]) == (422, "VALIDATION_ERROR")
     assert client.get("/api/v1/repair/settings", headers=as_manager).json() == current
+
+
+def test_settings_accept_values_at_the_limits(client, db, as_manager):
+    body = {
+        "categories": [" 电梯 ", "x" * 30],
+        "escalation_rules": [_rule(timeout_hours=1, notify_perm="repair:dispatch")],
+        "admin_accept_after_hours": 1,
+    }
+    resp = client.put("/api/v1/repair/settings", json=body, headers=as_manager)
+    assert resp.status_code == 200, resp.text
+    saved = client.get("/api/v1/repair/settings", headers=as_manager).json()
+    assert saved == body | {"categories": ["电梯", "x" * 30]}
 
 
 def test_settings_categories_drive_report_validation(client, db, as_reporter, as_manager):
@@ -236,7 +285,7 @@ def test_cancel_only_by_reporter_before_dispatch_and_notifies_dispatchers(
     resp = act(client, staff, order_id, "cancel", {"reason": "不修了"})
     assert (resp.status_code, resp.json()["code"]) == (403, "FORBIDDEN")
 
-    cancelled = act(client, as_reporter, order_id, "cancel", {"reason": "已自行修好"})
+    cancelled = act(client, as_reporter, order_id, "cancel", {"reason": " 已自行修好 "})
     assert cancelled.json()["status"] == "cancelled"
     (notice,) = notices(db, "repair.cancelled")
     assert (notice["user_ids"], notice["perm"]) == ([], "repair:dispatch")
@@ -251,7 +300,34 @@ def test_cancel_after_dispatch_is_rejected(client, db, as_reporter, as_dispatche
     dispatch(client, as_dispatcher, order_id)
     resp = act(client, as_reporter, order_id, "cancel", {"reason": "不修了"})
     assert (resp.status_code, resp.json()["code"]) == (409, "ORDER_STATE_CONFLICT")
+    assert resp.json()["message"] == "工单当前为“已派单”，不能执行此操作"
     assert status_of(db, order_id) == "dispatched"
+
+
+@pytest.mark.parametrize("text", ["", "   ", "修", " 修 "])
+def test_reason_and_note_need_two_non_blank_characters(
+    client, db, as_reporter, as_dispatcher, as_worker, common_calls, text
+):
+    submitted = report(client, as_reporter)
+    pending = to_pending(client, as_reporter, as_dispatcher, as_worker)
+    in_progress = report(client, as_reporter)
+    dispatch(client, as_dispatcher, in_progress)
+    act(client, as_worker, in_progress, "start")
+
+    responses = [
+        client.post(
+            ORDERS, json={"room_id": 3, "category": "空调", "description": text}, headers=as_reporter
+        ),
+        act(client, as_reporter, submitted, "cancel", {"reason": text}),
+        act(client, as_worker, in_progress, "complete", {"note": text}),
+        act(client, as_reporter, pending, "reject-acceptance", {"reason": text}),
+    ]
+    assert [resp.status_code for resp in responses] == [422] * 4
+    assert [status_of(db, i) for i in (submitted, in_progress, pending)] == [
+        "submitted",
+        "in_progress",
+        "pending_acceptance",
+    ]
 
 
 # ---------- 派单 ----------
@@ -281,6 +357,21 @@ def test_dispatch_deadline_must_be_in_future(
         assert resp.json()["code"] == "DEADLINE_NOT_FUTURE"
 
 
+def test_dispatch_deadline_given_in_utc_is_returned_in_business_time_zone(
+    client, db, as_reporter, as_dispatcher, common_calls
+):
+    order_id = report(client, as_reporter)
+    resp = client.post(
+        f"{ORDERS}/{order_id}/dispatch",
+        json={"assignee_id": WORKER_ID, "deadline_at": "2026-10-20T10:00:00Z", "blocks_room": False},
+        headers=as_dispatcher,
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["deadline_at"] == "2026-10-20T18:00:00+08:00"
+    (dispatched,) = notices(db, "repair.dispatched")
+    assert dispatched["params"]["deadline_at"] == "2026-10-20T18:00:00+08:00"
+
+
 def test_dispatch_only_from_submitted(client, db, as_reporter, as_dispatcher, common_calls):
     order_id = report(client, as_reporter)
     assert dispatch(client, as_dispatcher, order_id).status_code == 200
@@ -307,8 +398,8 @@ def test_only_assignee_starts_and_completes(client, db, as_reporter, as_dispatch
     assert (resp.status_code, resp.json()["code"]) == (403, "NOT_ASSIGNEE")
     assert act(client, as_worker, order_id, "start").status_code == 200
 
-    assert act(client, other_worker, order_id, "complete", {"note": "x"}).status_code == 404
-    resp = act(client, lead, order_id, "complete", {"note": "x"})
+    assert act(client, other_worker, order_id, "complete", {"note": "已修好"}).status_code == 404
+    resp = act(client, lead, order_id, "complete", {"note": "已修好"})
     assert (resp.status_code, resp.json()["code"]) == (403, "NOT_ASSIGNEE")
     assert status_of(db, order_id) == "in_progress"
     assert act(client, as_worker, order_id, "complete", {"note": "好了"}).status_code == 200
@@ -319,7 +410,7 @@ def test_start_and_complete_require_matching_state(
 ):
     order_id = report(client, as_reporter)
     dispatch(client, as_dispatcher, order_id)
-    assert act(client, as_worker, order_id, "complete", {"note": "x"}).status_code == 409
+    assert act(client, as_worker, order_id, "complete", {"note": "已修好"}).status_code == 409
     act(client, as_worker, order_id, "start")
     resp = act(client, as_worker, order_id, "start")
     assert (resp.status_code, resp.json()["code"]) == (409, "ORDER_STATE_CONFLICT")
@@ -374,13 +465,13 @@ def test_start_retry_after_lost_m1_response_sends_identical_request(
 def test_only_reporter_may_reject(client, db, as_reporter, as_dispatcher, as_worker, common_calls):
     order_id = to_pending(client, as_reporter, as_dispatcher, as_worker)
     other = user_headers(settings, perms=["repair:report"], user_id=1002)
-    assert act(client, other, order_id, "reject-acceptance", {"reason": "x"}).status_code == 404
+    assert act(client, other, order_id, "reject-acceptance", {"reason": "仍有故障"}).status_code == 404
     # 能看到工单（兼调度）的其他报修人：403
     staff = user_headers(settings, perms=["repair:report", "repair:dispatch"], user_id=DISPATCHER_ID)
-    resp = act(client, staff, order_id, "reject-acceptance", {"reason": "x"})
+    resp = act(client, staff, order_id, "reject-acceptance", {"reason": "仍有故障"})
     assert (resp.status_code, resp.json()["code"]) == (403, "FORBIDDEN")
     assert status_of(db, order_id) == "pending_acceptance"
-    assert act(client, as_reporter, order_id, "reject-acceptance", {"reason": "x"}).status_code == 200
+    assert act(client, as_reporter, order_id, "reject-acceptance", {"reason": "仍有故障"}).status_code == 200
 
 
 def test_accept_by_other_reporter_is_404_like_other_endpoints(
@@ -427,6 +518,7 @@ def test_manager_accepts_only_after_waiting_period(
         assert (order.status, order.closed_by) == ("pending_acceptance", None)
     else:
         assert (order.status, order.closed_by, order.rating) == ("closed", MANAGER_ID, 3)
+        assert resp.json()["timeline"][-1]["action"] == "admin_accept"
         (notice,) = notices(db, "repair.accepted")
         assert notice["params"]["by_admin"] is True
 
